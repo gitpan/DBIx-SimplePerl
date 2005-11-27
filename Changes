@@ -1,0 +1,17 @@
+Revision history for Perl extension DBIx::SimplePerl.
+
+1.1  Sun Nov 27 12:08:01 2005
+	- RENAMED DBI::Simple to DBIx::SimplePerl.  This had
+	  caused unintended confusion on the part of the users
+	  whom needed DBI to remain for DBI bits only, and DBIx
+	  for DBI-extensions.
+	- added table creation
+	- fixed some of the documentation and other bits as suggested 
+	  by various users
+
+1.0  Mon Oct 31 23:28:39 2005
+	- original version; created by h2xs 1.23 with options
+		-AX --skip-exporter --use-new-tests -n DBI::Simple -b 5.8.0 --email=landman@scalableinformatics.com -v1.0
+
+	Imported SICE.pm into DBI::Simple, created tests, did
+	basic documentation fixup.
