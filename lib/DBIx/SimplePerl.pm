@@ -14,17 +14,16 @@ use Data::Dumper;
 use constant true => (1==1);
 use constant false => (1==0);
 
-our $VERSION = '1.2';
+our $VERSION = '1.21';
 
 
 # Preloaded methods go here.
 =pod
-=head1 DBIx::SimplePerl
-
-=head1 DESCRIPTION
-
+=head1 NAME
 
 DBIx::SimplePerl - Perlish access to DBI
+
+=head1 ABSTRACT
 
 
 This module provides DBIx::SimplePerl which is a highly (over)simplified
@@ -119,7 +118,7 @@ record:
    values ("$username","$password","$homedir","$shell");
 
 If the insert operation failed or generated errors or warnings, you
-will be able to check for the existance of and inspect $sice->{error}.
+will be able to check for the existance of and inspect $sice->{failed}.
 As each DBD is different, no two different DBDs will generate the same 
 error messages or error codes.  
 
@@ -286,6 +285,58 @@ method call succeeded.  Error messages (if generated) would be
 stored in the anonymous hash's "failed" key.  Lack of existence of
 this key is another indicator of success. 
 
+=item db_create_table(table => $table_name,columns => {field1=>"type1",...})
+
+The C<db_create_table> method will take a record (the hash pointed to by 
+the columns field, generate the necessary SQL, and do an create table into
+the attached database handle.  That is, if we want to create a table 
+named "users", with columns of username, password, home directory, uid,
+shell, and date we can do something like this:
+
+    use DBIx::SimplePerl;
+    my $sice = DBIx::SimplePerl->new;        
+    $sice->db_open(
+                    'dsn'    => "dbi:SQLite:dbname=/etc/cluster/cluster.db",
+                    'dbuser' => "",
+                    'dbpass' => ""
+                  );
+  
+    $sice->db_create_table(
+    		   table   =>"users",
+		   columns => {
+		   		username	=> "varchar(30)",
+				password	=> "varchar(30)",
+				homedir		=> "varchar(255)",
+				shell		=> "varchar(30)",
+				uid		=> "integer",
+				date		=> "datetime"
+		   	      }
+		 );
+
+and the method will generate the appropriate SQL to create this 
+table:
+
+   create table "users" 
+   	(
+	  "username"	varchar(30),
+	  "password"	varchar(30),
+	  "homedir"	varchar(255) ,
+	  "shell"	varchar(30),
+	  "uid"		integer,
+	  "date"	datetime
+	);
+
+If the create operation failed or generated errors or warnings, you
+will be able to check for the existance of and inspect $sice->{failed}.
+As each DBD is different, no two different DBDs will generate the same 
+error messages or error codes.  
+
+If you would like to see the SQL the method generates, then set
+the debug attribute to a non-zero value
+
+  $sice->{debug} = 1;
+
+and it will emit the SQL it generates on the STDERR.
 
 
 =cut
@@ -347,11 +398,7 @@ sub db_open
       return \%rc;
     }
 
-=cut
-=item db_add(table=> $tablename, columns=>{field1=>$data1,...})
-
-
-=cut
+ 
 sub db_add
     {
       my ($self,%args)=@_;
@@ -445,11 +492,7 @@ sub db_add
       %rc= ( 'success' => true );
       return \%rc;
     }   
-=cut
-=item db_search(table=> $tablename, search=>{field1=>$data1,...})
-
-
-=cut
+ 
 sub db_search
     {
       my ($self,%args)=@_;
@@ -552,11 +595,7 @@ sub db_search
       %rc= ( 'success' => true );
       return \%rc;
     }   
-=cut
-=item db_update(table=> $tablename, search=>{field1=>$data1,...},columns=>{fieldN=>$dataN,...})
-
-
-=cut
+ 
 sub db_update
     {
       my ($self,%args)=@_;
@@ -658,10 +697,7 @@ sub db_update
       %rc= ( 'success' => true );
       return \%rc;
     }   
-=cut
-=item db_delete(table=> $tablename, search=>{field1=>$data1,...})
 
-=cut
 sub db_delete
     {
       my ($self,%args)=@_;
@@ -754,10 +790,7 @@ sub db_delete
       %rc= ( 'success' => true );
       return \%rc;
     }   
-=cut
-=item db_close
 
-=cut
 sub db_close
     {
       my ($self )=shift;

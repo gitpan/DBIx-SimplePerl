@@ -4,3 +4,4 @@ MANIFEST
 README
 t/DBIx-SimplePerl.t
 lib/DBIx/SimplePerl.pm
+META.yml                                 Module meta-data (added by MakeMaker)
