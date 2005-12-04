@@ -1,5 +1,14 @@
 Revision history for Perl extension DBIx::SimplePerl.
 
+
+1.22 Sun Dec 04 15:36:01 2005
+	- added quoting checks for postgresql and others
+	  change by setting $object->{quoting} explicitly 
+	  or letting the module decide for you.
+1.21 Sun Nov 29 12:08:01 2005
+        - minor bug fixes, YAML build,...
+1.2  Sun Nov 28 12:08:01 2005
+	- added create table function
 1.1  Sun Nov 27 12:08:01 2005
 	- RENAMED DBI::Simple to DBIx::SimplePerl.  This had
 	  caused unintended confusion on the part of the users

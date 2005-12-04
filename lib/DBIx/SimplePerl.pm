@@ -14,7 +14,7 @@ use Data::Dumper;
 use constant true => (1==1);
 use constant false => (1==0);
 
-our $VERSION = '1.21';
+our $VERSION = '1.22';
 
 
 # Preloaded methods go here.
@@ -69,6 +69,18 @@ database access do not necessarily need to write SQL.
 						  }
 		  );
   $sice->db_delete(table => $table_name,search => {field=>$data1,...});
+  
+  $sice->{debug} = 1 ; # turn on debugging
+  $sice->{debug} = 0 ; # turn off debugging
+  
+  # quoting for table, field, and value is set by default
+  # you can override it during or after creating the object.
+  $sice->{quote}->{table} = '"';
+  $sice->{quote}->{field} = '"';
+  $sice->{quote}->{value} = '"';
+  
+  # SQLite, Postgres, and MySQL are supported, with default
+  # quoting assumed for others.  You can change this as needed.
   
   $sice->close; 
 
@@ -395,6 +407,34 @@ sub db_open
 	 }
       %rc= ( 'success' => true );
       printf STDERR "D[%s]: DBIx::SimplePerl database connection dump = %s\n",$$,Dumper($self) if ($self->{debug});   
+      # handle field quoting
+      if (!defined($self->{quote}))
+         {
+          if ($dsn =~ /dbi:Pg/i)
+	     { # postgresql
+	       $self->{quote}->{table}='"';
+	       $self->{quote}->{field}='"';
+	       $self->{quote}->{value}='"';
+	     }
+	  elsif ($dsn =~ /dbi:SQLite/i)
+	     { # sqlite
+	       $self->{quote}->{table}='"';
+	       $self->{quote}->{field}="\'";
+	       $self->{quote}->{value}='"';
+	     }
+	  elsif ($dsn =~ /DBI:mysql/i)
+	     { # mysql
+	       $self->{quote}->{table}="";
+	       $self->{quote}->{field}="";
+	       $self->{quote}->{value}='"';
+	     }
+	  else
+	     { # default
+	       $self->{quote}->{table}='"';
+	       $self->{quote}->{field}="\'";
+	       $self->{quote}->{value}='"';
+	     }	     
+         }
       return \%rc;
     }
 
@@ -402,14 +442,14 @@ sub db_open
 sub db_add
     {
       my ($self,%args)=@_;
-      my ($table,$columns,$prep,%rc,@fields,@values);
+      my ($table,$q_table,$columns,$prep,%rc,@fields,@q_fields,@values);
       
       # quick error check    
       foreach (qw(table columns))
         {
 	 if (exists($args{$_})) 
             { 
-	      $table	= $args{$_} if ($_ eq 'table');
+	      $table	= $self->_quote_table($args{$_}) if ($_ eq 'table');
 	      $columns	= $args{$_} if ($_ eq 'columns');
 	    }
 	   else
@@ -426,15 +466,16 @@ sub db_add
 	 }
 
       # extract fields and values from the columns
-      @fields=(keys %{$columns});
-      map { push @values,$columns->{$_} } @fields;
+      @fields=(keys %{$columns});    
+      map { push @values,$self->_quote_value($columns->{$_}) } @fields;
+      map { push @q_fields,$self->_quote_field($_) } @fields;
       
       # create the SQL for the insert
       $prep  = sprintf 'INSERT INTO %s (',$table;
-      $prep .= join(",",@fields). ') VALUES (';
+      $prep .= join(",",@q_fields). ') VALUES (';
       foreach (0 .. $#values)
         {
-	  $prep .= sprintf "\'%s\'",$values[$_];
+	  $prep .= sprintf "%s",$values[$_];
 	  $prep .= "," if ($_ < $#values);
 	}
       $prep .= ')';
@@ -496,14 +537,14 @@ sub db_add
 sub db_search
     {
       my ($self,%args)=@_;
-      my ($table,$search,$prep,%rc,@fields,@values);
+      my ($table,$search,$prep,%rc,@fields,@values,@q_fields);
       
       # quick error check    
       foreach (qw(table search))
         {
 	 if (exists($args{$_})) 
             { 
-	      $table	= $args{$_} if ($_ eq 'table');
+	      $table	= $self->_quote_table($args{$_}) if ($_ eq 'table');
 	      $search	= $args{$_} if ($_ eq 'search');
 	    }
 	} 
@@ -530,14 +571,15 @@ sub db_search
 
 	  # extract fields and values from the columns
 	  @fields=(keys %{$search});
-	  map { push @values,$search->{$_} } @fields;
+          map { push @values,$self->_quote_value($search->{$_}) } @fields;
+          map { push @q_fields,$self->_quote_field($_) } @fields;
 
 	  # create the SQL for the insert
 	  $prep  = sprintf 'SELECT * FROM %s WHERE ',$table;      
-	  foreach (0 .. $#fields)
+	  foreach (0 .. $#q_fields)
             {
 	     $prep .= " AND " if ($_ > 0);
-	     $prep .= sprintf "%s=\'%s\'",$fields[$_],$values[$_];
+	     $prep .= sprintf "%s=%s",$q_fields[$_],$values[$_];
 	    }
         }
       printf STDERR "D[%s] db_search: prepare = \'%s\' \n",
@@ -600,13 +642,14 @@ sub db_update
     {
       my ($self,%args)=@_;
       my ($table,$search,$columns,$prep,%rc,@sfields,@svalues,@cfields,@cvalues);
+      my (@q_sfields,@q_cfields);     
       
       # quick error check    
       foreach (qw(table search columns))
         {
 	 if (exists($args{$_})) 
             { 
-	      $table	= $args{$_} if ($_ eq 'table');
+	      $table	= $self->_quote_table($args{$_}) if ($_ eq 'table');
 	      $search	= $args{$_} if ($_ eq 'search');
 	      $columns	= $args{$_} if ($_ eq 'columns');
 	    }
@@ -625,22 +668,24 @@ sub db_update
 
       # extract fields and values from the columns
       @sfields=(keys %{$search});
-      map { push @svalues,$search->{$_} } @sfields;
+      map { push @svalues,$self->_quote_field($search->{$_}) } @sfields;
+      map { push @q_sfields,$self->_quote_field($_) } @sfields;
       @cfields=(keys %{$columns});
-      map { push @cvalues,$columns->{$_} } @cfields;
+      map { push @cvalues,$self->_quote_value($columns->{$_}) } @cfields;
+      map { push @q_cfields,$self->_quote_field($_) } @cfields;
       
       # create the SQL for the insert
       $prep  = sprintf 'UPDATE %s  SET ',$table;      
       foreach (0 .. $#cfields)
         {
 	 $prep .= "," if ($_ > 0);
-	 $prep .= sprintf "%s=\'%s\'",$cfields[$_],$cvalues[$_];
+	 $prep .= sprintf "%s=%s",$q_cfields[$_],$cvalues[$_];
 	}
       $prep .= ' WHERE ';
       foreach (0 .. $#sfields)
         {
 	 $prep .= "," if ($_ > 0);
-	 $prep .= sprintf "%s=\'%s\'",$sfields[$_],$svalues[$_];
+	 $prep .= sprintf "%s=%s",$q_sfields[$_],$svalues[$_];
 	}
       printf STDERR "D[%s] db_update: prepare = \'%s\' \n",
 	   $$,$prep  if ($self->{debug});
@@ -701,14 +746,14 @@ sub db_update
 sub db_delete
     {
       my ($self,%args)=@_;
-      my ($table,$search,$prep,%rc,@fields,@values);
+      my ($table,$search,$prep,%rc,@fields,@values,@q_fields);
       
       # quick error check    
       foreach (qw(table search))
         {
 	 if (exists($args{$_})) 
             { 
-	      $table	= $args{$_} if ($_ eq 'table');
+	      $table	= $self->_quote_table($args{$_}) if ($_ eq 'table');
 	      $search	= $args{$_} if ($_ eq 'search');
 	    }
 	   else
@@ -726,14 +771,16 @@ sub db_delete
 
       # extract fields and values from the columns
       @fields=(keys %{$search});
-      map { push @values,$search->{$_} } @fields;
+      map { push @values,$self->_quote_value($search->{$_}) } @fields;
+      map { push @q_fields,$self->_quote_field($_) } @fields;
       
-      # create the SQL for the insert
+      
+      # create the SQL for the delete
       $prep  = sprintf 'DELETE FROM %s WHERE ',$table;      
       foreach (0 .. $#fields)
         {
 	 $prep .= "," if ($_ > 0);
-	 $prep .= sprintf "%s=\'%s\'",$fields[$_],$values[$_];
+	 $prep .= sprintf "%s=%s",$q_fields[$_],$values[$_];
 	}
       printf STDERR "D[%s] db_delete: SQL=\'%s\'\n",$$,$prep  if ($self->{debug});
      
@@ -801,14 +848,14 @@ sub db_close
 sub db_create_table
     {
       my ($self,%args)=@_;
-      my ($table,$columns,$prep,%rc,@fields,%types);
+      my ($table,$columns,$prep,%rc,@fields,%types,@q_fields);
       
       # quick error check    
       foreach (qw(table columns))
         {
 	 if (exists($args{$_})) 
             { 
-	      $table	= $args{$_} if ($_ eq 'table');
+	      $table	= $self->_quote_table($args{$_}) if ($_ eq 'table');
 	      $columns	= $args{$_} if ($_ eq 'columns');
 	    }
 	   else
@@ -827,14 +874,15 @@ sub db_create_table
       # extract fields and values from the columns
       @fields=(keys %{$columns});
       map { $types{$_}=$columns->{$_} } @fields;
-      
+      map { push @q_fields,$self->_quote_field($_) } @fields;
+     
       # create the SQL for the insert
-      $prep  = sprintf 'CREATE TABLE "%s" (',$table;
+      $prep  = sprintf 'CREATE TABLE %s (',$table;
       $prep .= "\n";
       
       foreach (0 .. $#fields)
         {
-	  $prep .= sprintf "\t\'%s\' %s",$fields[$_],$types{$fields[$_]};
+	  $prep .= sprintf "\t%s   %s",$q_fields[$_],$types{$fields[$_]};
 	  $prep .= ",\n" if ($_ < $#fields);
 	}
       $prep .= ')';
@@ -891,6 +939,34 @@ sub db_create_table
       %rc= ( 'success' => true );
       return \%rc;
     }   
+
+sub _quote_table
+    {
+      my ($self,$value) = @_;
+      my $_x = sprintf "%s%s%s",
+      			$self->{quote}->{table},
+			$value,
+			$self->{quote}->{table};
+      return $_x;
+    }
+sub _quote_field
+    {
+      my ($self,$value) = @_;
+      my $_x = sprintf "%s%s%s",
+      			$self->{quote}->{field},
+			$value,
+			$self->{quote}->{field};
+      return $_x;
+    }
+sub _quote_value
+    {
+      my ($self,$value) = @_;
+      my $_x = sprintf "%s%s%s",
+      			$self->{quote}->{value},
+			$value,
+			$self->{quote}->{value};
+      return $_x;
+    }
 =cut
 =pod
 =back
