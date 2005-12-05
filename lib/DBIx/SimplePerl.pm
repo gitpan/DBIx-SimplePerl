@@ -14,7 +14,7 @@ use Data::Dumper;
 use constant true => (1==1);
 use constant false => (1==0);
 
-our $VERSION = '1.22';
+our $VERSION = '1.23';
 
 
 # Preloaded methods go here.
@@ -414,7 +414,7 @@ sub db_open
 	     { # postgresql
 	       $self->{quote}->{table}='"';
 	       $self->{quote}->{field}='"';
-	       $self->{quote}->{value}='"';
+	       $self->{quote}->{value}="\'";
 	     }
 	  elsif ($dsn =~ /dbi:SQLite/i)
 	     { # sqlite
@@ -668,7 +668,7 @@ sub db_update
 
       # extract fields and values from the columns
       @sfields=(keys %{$search});
-      map { push @svalues,$self->_quote_field($search->{$_}) } @sfields;
+      map { push @svalues,$self->_quote_value($search->{$_}) } @sfields;
       map { push @q_sfields,$self->_quote_field($_) } @sfields;
       @cfields=(keys %{$columns});
       map { push @cvalues,$self->_quote_value($columns->{$_}) } @cfields;

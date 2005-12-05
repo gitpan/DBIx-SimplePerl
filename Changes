@@ -1,6 +1,9 @@
 Revision history for Perl extension DBIx::SimplePerl.
 
-
+1.23 Sun Dec 04 20:43:01 2005
+	- bug fix for PostGreSQL quoting
+	- bug fix for db_update, used a _quote_field call where
+	  we needed a _quote_value call.
 1.22 Sun Dec 04 15:36:01 2005
 	- added quoting checks for postgresql and others
 	  change by setting $object->{quoting} explicitly 
