@@ -1,5 +1,11 @@
 Revision history for Perl extension DBIx::SimplePerl.
 
+1.30 Sun Jun 11 10:51:01 2006
+	- added additional db_open option processing
+	- fixed some style errors in the program text
+	- added db_commit
+1.24 Thu Dec 22 15:30:01 2005
+	- bug fix for SQLite, incorrect field quoting...
 1.23 Sun Dec 04 20:43:01 2005
 	- bug fix for PostGreSQL quoting
 	- bug fix for db_update, used a _quote_field call where

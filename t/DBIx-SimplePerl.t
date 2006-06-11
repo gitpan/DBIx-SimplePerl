@@ -175,7 +175,83 @@ SKIP: {
 	     fail("SQLite db_update");
 	     exit;
 	   }
+        
+	undef $rc;
+	$rc	= $sice->db_close;
+ 	if (defined($rc->{error}))
+	   {
+	     fail("SQLite db_close");
+	     exit;
+	   }
 	
-	unlink $dbname;
+	$sice->db_open(
+                        'dsn' => "dbi:SQLite:dbname=".$dbname,
+                        'dbuser'        => "",
+                        'dbpass'        => "",
+			'AutoCommit'	=> 0
+                      );
 
+	undef $rc;
+ 	$rc	= $sice->db_create_table(
+					 table=>"test2",
+					 columns=>{
+					 	    name  => "text",
+						    number=> "integer",
+						    fp    => "number"
+					 	  }
+					);
+ 	if (defined($rc->{success}))
+	   {
+	     pass("SQLite db_create_table with autocommit off");	     
+	   }
+	  else
+	   {
+	     fail("SQLite db_create_table with autocommit off");
+	     exit;
+	   }
+	   
+	undef $rc;
+        $rc	= $sice->db_commit; #make the table
+ 	if (defined($rc->{failed}))	   
+	   {
+	     fail("SQLite db_create_table commit: ".$rc->{failed});
+	     exit;
+	   }
+	undef $rc;
+	for(my $i=0;$i<100;$i++)
+	 {
+	  $rc	= $sice->db_add(
+				table=>"test2",
+				columns=>{
+					  name  => (sprintf "a%i-b",$i),
+					  number=> $i,
+					  fp    => 1.1*$i
+					 }
+				);
+
+ 	  if (defined($rc->{failed}))
+	     {
+	       fail("SQLite db_add without commit: ".$rc->{failed});
+	       exit;
+	     }	  
+	 }
+	undef $rc;
+        $rc	= $sice->db_commit; #commit the table
+ 	if (defined($rc->{failed}))	   
+	   {
+	     fail("SQLite db_commit: commit the db_add: ".$rc->{failed});
+	     exit;
+	   }
+	undef $rc;
+	$rc	= $sice->db_close;
+ 	if (defined($rc->{failed}))
+	   {
+	     fail("SQLite db_close: ".$rc->{failed});
+	     exit;
+	   }
+	
+	
+	
+
+	unlink $dbname;
       }

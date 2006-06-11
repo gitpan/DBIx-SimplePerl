@@ -14,7 +14,7 @@ use Data::Dumper;
 use constant true => (1==1);
 use constant false => (1==0);
 
-our $VERSION = '1.23';
+our $VERSION = '1.30';
 
 
 # Preloaded methods go here.
@@ -59,7 +59,8 @@ database access do not necessarily need to write SQL.
   #     }
   
   # sets internal $sice->{_dbh} to open database handle
-  $sice->db_open(dsn => $dsn, dbuser => $dbuser, dbpass => $dbpass);
+  $sice->db_open(dsn => $dsn, dbuser => $dbuser, dbpass => $dbpass
+  		 [, AutoCommit => 0|1 ] ... );
   
   $sice->db_add(table => $table_name,columns => {field1=>$data1,...});
   $sice->db_search(table => $table_name [,search => {field=>$data1,...}]);
@@ -67,7 +68,7 @@ database access do not necessarily need to write SQL.
                                                    columns=>
 						     {field1=>$data1,...
 						  }
-		  );
+  $sice->db_commit;		  );
   $sice->db_delete(table => $table_name,search => {field=>$data1,...});
   
   $sice->{debug} = 1 ; # turn on debugging
@@ -93,9 +94,10 @@ The session handle is available under the object as $sice->{_sth}
 =item db_open(dsn => $dsn, dbuser => $dbuser, dbpass => $dbpass  )
 
 The C<db_open> method returns a database handle attached to
-$self->{_dbh}.  RaiseError is set to 1.  This function attaches the
-object to a database.  As long as the DBD/DBI supports it, you may
-have multiple independent objects connected to the same database.
+$self->{_dbh}.  RaiseError and AutoCommit default
+to 1.  This function attaches the object to a database.
+As long as the DBD/DBI supports it, you may have multiple 
+independent objects connected to the same database.
 
 =item db_add(table => $table_name,columns => {field1=>$data1,...})
 
@@ -130,7 +132,7 @@ record:
    values ("$username","$password","$homedir","$shell");
 
 If the insert operation failed or generated errors or warnings, you
-will be able to check for the existance of and inspect $sice->{failed}.
+will be able to check for the existence of and inspect $sice->{failed}.
 As each DBD is different, no two different DBDs will generate the same 
 error messages or error codes.  
 
@@ -170,7 +172,7 @@ select:
    select from "users" where "username"="$username";
 
 If the select operation failed or generated errors or warnings, you
-will be able to check for the existance of and inspect $sice->{error}.
+will be able to check for the existence of and inspect $sice->{error}.
 As each DBD is different, no two different DBDs will generate the same 
 error messages or error codes.  As many fields as are relevant in the 
 particular table may be used.  The search=> may be completely omitted 
@@ -239,7 +241,7 @@ update.:
                    where "username"="$username";
 
 If the update operation failed or generated errors or warnings, you
-will be able to check for the existance of and inspect $sice->{error}.
+will be able to check for the existence of and inspect $sice->{error}.
 As many fields as are relevant in the particular table may be used 
 in the search hash or the column hash.  The results are returned as
 a DBI session handle, and any of the DBI methods may be used to
@@ -252,6 +254,26 @@ method call succeeded.  Error messages (if generated) would be
 stored in the anonymous hash's "failed" key.  Lack of existence of
 this key is another indicator of success. 
 
+=item db_commit
+
+
+The C<db_commit> method will perform an explicit commit on the 
+db handle.  This is useful when AutoCommit is set to 0.  Note that 
+this means that if you disconnect on an AutoCommit => 0 db before
+doing a db_close, that your state changes will likely be lost.  
+
+B<Caveat Programmer>
+
+You would need to perform the db_commit after some group of operations
+on an AutoCommit => 0 to insure that they are in fact committed to 
+disk.  If AutoCommit => 0, this is entirely your responsibility.  
+Turning off AutoCommit can speed things up tremendously, though 
+it will do it at the expense of granularity.  Your changes will be 
+much larger grained.  This is why we default to AutoCommit => 1, so
+you do not need to think about this for most cases.
+
+If the commit operation failed or generated errors or warnings, you
+will be able to check for the existence of and inspect $sice->{error}.
 
 =item db_delete(table => $table_name, search => {field1=>$data1,...})
 
@@ -284,7 +306,7 @@ update.:
    delete from "users" where "username"="$username";
 
 If the delete operation failed or generated errors or warnings, you
-will be able to check for the existance of and inspect $sice->{error}.
+will be able to check for the existence of and inspect $sice->{error}.
 As many fields as are relevant in the particular table may be used 
 in the search hash.  The results are returned as
 a DBI session handle, and any of the DBI methods may be used to
@@ -339,7 +361,7 @@ table:
 	);
 
 If the create operation failed or generated errors or warnings, you
-will be able to check for the existance of and inspect $sice->{failed}.
+will be able to check for the existence of and inspect $sice->{failed}.
 As each DBD is different, no two different DBDs will generate the same 
 error messages or error codes.  
 
@@ -355,12 +377,12 @@ and it will emit the SQL it generates on the STDERR.
 sub db_open
     {
       my ($self,%args) = @_;
-      my ($dsn,$dbuser,$dbpass,$options,%rc,$dbh,$tmp,$name);
-
-      if ($self->{debug})
-         {
-	   printf STDERR "D[%s] db_open: args -> \'%s\'\n",$$,join(":",keys(%args)) if ($self->{debug});
-	 }
+      my ($dsn,$dbuser,$dbpass,$options,%rc,$dbh,$tmp,$name,$autocommit);
+      my ($remaining,$raiseerror,@opts,%attr);
+      
+      
+      printf STDERR "D[%s] db_open: args -> \'%s\'\n",$$,join(":",keys(%args)) if ($self->{debug});
+	
       # quick error check    
       foreach (qw(dsn dbuser dbpass))
         {
@@ -369,23 +391,37 @@ sub db_open
 	      $dsn	= $args{$_} if ($_ eq 'dsn');
 	      $dbuser	= $args{$_} if ($_ eq 'dbuser');
 	      $dbpass	= $args{$_} if ($_ eq 'dbpass');
+	      delete $args{$_};
 	    }
 	   else
 	    {
 	      %rc= ( 'failed' => {'error' => "no $_ specified" } );
 	      return \%rc;
 	    }
-	} 
+	}
+      foreach (keys %args)
+       {
+        $attr{$_}=$args{$_} if (($_ ne "dsn") && ($_ ne "dbuser")&& ($_ ne "dbpass")) ;	 
+       }      
+      # construct remaining arg string
+      $remaining	= "";
+      $attr{'AutoCommit'} = 1 if (!defined($attr{AutoCommit}));
+      $attr{'RaiseError'} = 1 if (!defined($attr{RaiseError}));
+      map { push @opts,(sprintf "%s => %s",$_,$attr{$_}) } (keys %attr) ;
+
+      $remaining = join(", ",@opts);
+      printf STDERR "D[%s] db_open: open optional args -> \'%s\'\n",$$,$remaining if ($self->{debug});
+	 
       # connect to DB
       $self->{_dbh}	= false;
-        {
-             $self->{_dbh}= DBI->connect(
-	    				 $dsn, 
-					 $dbuser, 
-					 $dbpass, 
-					 {'RaiseError' => 1, AutoCommit=>1 }
-					);
-	   };
+       
+      $self->{_dbh}= DBI->connect(
+	    			  $dsn, 
+				  $dbuser, 
+				  $dbpass, 
+				  \%attr
+				 );
+	  
       if (
           (defined($self->{_dbh} )) 	&& 
 	  (defined($self->{_dbh}->err))	&& 
@@ -419,7 +455,7 @@ sub db_open
 	  elsif ($dsn =~ /dbi:SQLite/i)
 	     { # sqlite
 	       $self->{quote}->{table}='"';
-	       $self->{quote}->{field}="\'";
+	       $self->{quote}->{field}="";
 	       $self->{quote}->{value}='"';
 	     }
 	  elsif ($dsn =~ /DBI:mysql/i)
@@ -841,9 +877,57 @@ sub db_delete
 sub db_close
     {
       my ($self )=shift;
+      my %rc;
       if (defined($self->{_sth})) { undef $self->{_sth} ; }
       $self->{_dbh}->disconnect();      
+      printf STDERR "D[%s] db_close\n",$$ if ($self->{debug});
+      if (
+          (defined($self->{_dbh} )) 	&& 
+	  (defined($self->{_dbh}->errstr))	
+	 )
+	 {
+	   printf STDERR "D[%s] db_close: disconnect failed with error \'%s\'\n",
+	   $$,$self->{_dbh}->errstr  if ($self->{debug});
+	   %rc= ( 
+	   	 'failed' => {
+		 	      'error'	=> $self->{_dbh}->errstr , 
+			     } 
+		);
+	   return \%rc;        
+	 }     
+	else
+	 {
+	   %rc= (  'success' => true );
+	   return \%rc;
+	 } 
     } 
+
+sub db_commit
+    {
+      my ($self )=shift;
+      my %rc;
+      $self->{_dbh}->commit() if (defined($self->{_dbh}));      
+      printf STDERR "D[%s] db_commit\n",$$ if ($self->{debug});
+      if (
+          (defined($self->{_dbh} )) 	&& 
+	  (defined($self->{_dbh}->errstr))	
+	 )
+	 {
+	   printf STDERR "D[%s] db_commit: commit failed with error \'%s\'\n",
+	   $$,$self->{_dbh}->errstr  if ($self->{debug});
+	   %rc= ( 
+	   	 'failed' => {
+		 	      'error'	=> $self->{_dbh}->errstr , 
+			     } 
+		);
+	   return \%rc;    
+	 }
+	else
+	 {
+	   %rc= (  'success' => true );
+	   return \%rc;
+	 } 
+    }
     
 sub db_create_table
     {
@@ -909,7 +993,7 @@ sub db_create_table
 	 }
 	else
 	 {
-	   printf STDERR "D[%s] db_create_table: prepare succeeded\n",$$ if ($self->{debug});   
+	   printf STDERR "D[%s] db_create_table: prepare succeeded\n",$$ if ($self->{debug});   	
 	 }
       
       # execute it ...
