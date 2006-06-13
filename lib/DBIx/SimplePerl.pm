@@ -14,7 +14,7 @@ use Data::Dumper;
 use constant true => (1==1);
 use constant false => (1==0);
 
-our $VERSION = '1.30';
+our $VERSION = '1.31';
 
 
 # Preloaded methods go here.
