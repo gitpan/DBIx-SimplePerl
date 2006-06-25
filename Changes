@@ -1,5 +1,8 @@
 Revision history for Perl extension DBIx::SimplePerl.
 
+1.40 Sun Jun 25 02:30:01 2006
+	- added count, min, max methods to search
+	- added count, min, max tests
 1.31 Mon Jun 12 15:40:01 2006
 	- added DBI in as an explicit requirement. Who knew
 	  that someone would try to install a DBIx module without

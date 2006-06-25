@@ -14,7 +14,7 @@ use Data::Dumper;
 use constant true => (1==1);
 use constant false => (1==0);
 
-our $VERSION = '1.31';
+our $VERSION = '1.40';
 
 
 # Preloaded methods go here.
@@ -63,7 +63,12 @@ database access do not necessarily need to write SQL.
   		 [, AutoCommit => 0|1 ] ... );
   
   $sice->db_add(table => $table_name,columns => {field1=>$data1,...});
-  $sice->db_search(table => $table_name [,search => {field=>$data1,...}]);
+  $sice->db_search(table => $table_name 
+  			    [,search => {field=>$data1,...}]
+ 			    [, count =>  field             ]
+ 			    [, max   =>  field             ]
+ 			    [, min   =>  field             ]			    
+		  );
   $sice->db_update(table => $table_name,search => {field=>$data1,...},
                                                    columns=>
 						     {field1=>$data1,...
@@ -161,9 +166,7 @@ username, we can do something like this:
   
     $sice->db_search(
     		   table   =>"users",
-		   search => {
-		   		username => $username
-		   	      }
+		   search => { username => $username }
 		 );
 
 and the method will generate the appropriate SQL to perform this 
@@ -573,15 +576,20 @@ sub db_add
 sub db_search
     {
       my ($self,%args)=@_;
-      my ($table,$search,$prep,%rc,@fields,@values,@q_fields);
+      my ($table,$search,$prep,%rc,@fields,@values,@q_fields,$order);
+      my ($count, $max, $min);
       
       # quick error check    
-      foreach (qw(table search))
+      foreach (qw(table search order count max min))
         {
 	 if (exists($args{$_})) 
             { 
 	      $table	= $self->_quote_table($args{$_}) if ($_ eq 'table');
 	      $search	= $args{$_} if ($_ eq 'search');
+	      $order	= $args{$_} if ($_ eq 'order');
+	      $count	= $args{$_} if ($_ eq 'count');
+	      $max	= $args{$_} if ($_ eq 'max');
+	      $min	= $args{$_} if ($_ eq 'min');
 	    }
 	} 
       if (!defined($table))      
@@ -600,7 +608,22 @@ sub db_search
       # search (e.g. select * from table; )
       if (!defined($search))
          {
-	  $prep  = sprintf 'SELECT * FROM %s',$table;
+	  if ( (!defined($count)) && (!defined($min)) && (!defined($max)) )
+	   {
+	    $prep  = sprintf 'SELECT * FROM %s',$table;
+	   }
+	  elsif (defined($count))
+	   {
+	     $prep  = sprintf 'SELECT count(%s) FROM %s',$count,$table;
+	   }
+	  elsif (defined($max))
+	   {
+	     $prep  = sprintf 'SELECT max(%s) FROM %s',$max,$table;
+	   }
+	  elsif (defined($min))
+	   {
+	     $prep  = sprintf 'SELECT min(%s) FROM %s',$min,$table;
+	   }
 	 }
 	else
 	 {
@@ -617,7 +640,8 @@ sub db_search
 	     $prep .= " AND " if ($_ > 0);
 	     $prep .= sprintf "%s=%s",$q_fields[$_],$values[$_];
 	    }
-        }
+         }
+      if (defined($order)) { $prep .= (sprintf " ORDER BY %s ",$order)}
       printf STDERR "D[%s] db_search: prepare = \'%s\' \n",
 	   $$,$prep  if ($self->{debug});
 

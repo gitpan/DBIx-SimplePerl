@@ -158,7 +158,7 @@ SKIP: {
          }
 	undef $q;
 	undef $rc;
-	undef $rc;
+
 	$rc	= $sice->db_delete(
 					 table=>"test1",
 					 search=>{
@@ -243,6 +243,52 @@ SKIP: {
 	     exit;
 	   }
 	undef $rc;
+		$rc	= $sice->db_search(
+					 table=>"test1",
+					 count=>"number"
+					);
+	
+ 	if (defined($rc->{success}))
+	   {
+	     pass("SQLite db_search with count");	     
+	   }
+	  else
+	   {
+	     fail("SQLite db_search with count ");
+	     exit;
+	   }
+	undef $rc;
+	$rc	= $sice->db_search(
+					 table=>"test1",
+					 max=>"fp"
+					);
+	
+ 	if (defined($rc->{success}))
+	   {
+	     pass("SQLite db_search with max");	     
+	   }
+	  else
+	   {
+	     fail("SQLite db_search with max ");
+	     exit;
+	   }
+
+	undef $rc;
+	$rc	= $sice->db_search(
+					 table=>"test1",
+					 min=>"fp"
+					);
+	
+ 	if (defined($rc->{success}))
+	   {
+	     pass("SQLite db_search with min");	     
+	   }
+	  else
+	   {
+	     fail("SQLite db_search with min ");
+	     exit;
+	   }
+	
 	$rc	= $sice->db_close;
  	if (defined($rc->{failed}))
 	   {
