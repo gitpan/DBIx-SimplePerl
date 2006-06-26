@@ -1,5 +1,7 @@
 Revision history for Perl extension DBIx::SimplePerl.
 
+1.41 Sun Jun 25 20:30:01 2006
+	- added boolean condition search
 1.40 Sun Jun 25 02:30:01 2006
 	- added count, min, max methods to search
 	- added count, min, max tests

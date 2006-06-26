@@ -14,7 +14,7 @@ use Data::Dumper;
 use constant true => (1==1);
 use constant false => (1==0);
 
-our $VERSION = '1.40';
+our $VERSION = '1.41';
 
 
 # Preloaded methods go here.
@@ -64,7 +64,11 @@ database access do not necessarily need to write SQL.
   
   $sice->db_add(table => $table_name,columns => {field1=>$data1,...});
   $sice->db_search(table => $table_name 
-  			    [,search => {field=>$data1,...}]
+  			    [,search => {
+			    		 field1=>$data1 
+					 [,field2=>@array2]
+					 ...
+					}                  ]
  			    [, count =>  field             ]
  			    [, max   =>  field             ]
  			    [, min   =>  field             ]			    
@@ -173,6 +177,26 @@ and the method will generate the appropriate SQL to perform this
 select:
 
    select from "users" where "username"="$username";
+
+If you provide an array to the search field (username in this example)
+the module will do the right thing and generate 
+
+   select from "users" where "username" in ( "@{$username}[0]" ,
+   "@{$username}[1]" , ... , "@{$username}[N]");
+   
+So if you performed this call like this:
+
+    $sice->db_search(
+    		   table   =>"users",
+		   search => { username => ["Tom","Dick","Harry"] }
+		 );
+
+the module will generate the query as
+
+   select from "users" where "username" in ("Tom", "Dick", "Harry");
+   
+This functionality is not yet in other methods than the search module.  
+This will change in short order.
 
 If the select operation failed or generated errors or warnings, you
 will be able to check for the existence of and inspect $sice->{error}.
@@ -577,10 +601,10 @@ sub db_search
     {
       my ($self,%args)=@_;
       my ($table,$search,$prep,%rc,@fields,@values,@q_fields,$order);
-      my ($count, $max, $min);
+      my ($count, $max, $min, $boolean, $in_variant,$v_values);
       
       # quick error check    
-      foreach (qw(table search order count max min))
+      foreach (qw(table search order count max min boolean))
         {
 	 if (exists($args{$_})) 
             { 
@@ -628,18 +652,60 @@ sub db_search
 	else
 	 {
 
+	  $prep  = sprintf 'SELECT * FROM %s WHERE ',$table;      
 	  # extract fields and values from the columns
 	  @fields=(keys %{$search});
-          map { push @values,$self->_quote_value($search->{$_}) } @fields;
           map { push @q_fields,$self->_quote_field($_) } @fields;
+	  $in_variant	=  (1==0);	#force it to false
+	  
+	  # see if we are dealing with a field => [array of values]
+	  # if this is the case, the we need to construct the search
+	  # using the where field in ('value1', 'value2', ... , 'valueN')
+	  map { 
+	        $in_variant = (1==1) if (ref($search->{$_}) eq "ARRAY");
+	      } @fields;
+	      
+	  if (!$in_variant)
+	   {
+	    # normal method, using simple scalar values for fields
+            map { push @values,$self->_quote_value($search->{$_}) } @fields;
 
-	  # create the SQL for the insert
-	  $prep  = sprintf 'SELECT * FROM %s WHERE ',$table;      
-	  foreach (0 .. $#q_fields)
-            {
-	     $prep .= " AND " if ($_ > 0);
-	     $prep .= sprintf "%s=%s",$q_fields[$_],$values[$_];
-	    }
+	    # create the SQL for the insert
+	    foreach (0 .. $#q_fields)
+              {
+	       $prep .= " AND " if ($_ > 0);
+	       $prep .= sprintf "%s=%s",$q_fields[$_],$values[$_];
+	      }
+	   }
+	   else
+	   {
+	    # more complex method.  First scan through the non-array bits
+	    # and add them.  Then 
+	    
+	    my $_count=1;
+	    foreach (@fields)
+	     { 
+	      $prep .= " AND " if ($_count > 1);
+	      if (ref($search->{$_}) ne "ARRAY")
+	       {
+	        $prep .= sprintf "%s=%s",$self->_quote_field($_),
+		$self->_quote_value($search->{$_});
+	       }
+	       else
+	       {
+	        my $_in_="(";
+		my $_field_=$_;
+		foreach (@{$search->{$_}})
+		 {
+		  $_in_ .= (sprintf "%s, ",$self->_quote_value($_));		  
+		 }
+		$_in_ .= ")";
+		$_in_ =~ s/\,\s+\)$/\)/; # clean up the last comma
+		$prep .= sprintf "%s in %s",$self->_quote_field($_field_),$_in_;
+	       }
+	      $_count++;
+	     }  
+	   }
          }
       if (defined($order)) { $prep .= (sprintf " ORDER BY %s ",$order)}
       printf STDERR "D[%s] db_search: prepare = \'%s\' \n",

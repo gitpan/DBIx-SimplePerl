@@ -288,6 +288,22 @@ SKIP: {
 	     fail("SQLite db_search with min ");
 	     exit;
 	   }
+	undef $rc;
+	$rc	= $sice->db_search(
+					 table=>"test1",
+					 search=>{"number" => [1,2,3,4,5]}
+					);
+	
+ 	if (defined($rc->{success}))
+	   {
+	     pass("SQLite db_search with vector_in");	     
+	   }
+	  else
+	   {
+	     fail("SQLite db_search with vector_in ");
+	     exit;
+	   }
+
 	
 	$rc	= $sice->db_close;
  	if (defined($rc->{failed}))
