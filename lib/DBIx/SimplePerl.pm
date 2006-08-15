@@ -14,7 +14,7 @@ use Data::Dumper;
 use constant true => (1==1);
 use constant false => (1==0);
 
-our $VERSION = '1.41';
+our $VERSION = '1.50';
 
 
 # Preloaded methods go here.
@@ -44,6 +44,9 @@ database access do not necessarily need to write SQL.
 
 =head1 SYNOPSIS
 
+  # Brackets [] represent optional items, not array indices.
+  # Elipses ... mean more of the same inputs/options
+  
   use DBIx::SimplePerl;
   my $sice = DBIx::SimplePerl->new;
 				 
@@ -59,26 +62,60 @@ database access do not necessarily need to write SQL.
   #     }
   
   # sets internal $sice->{_dbh} to open database handle
-  $sice->db_open(dsn => $dsn, dbuser => $dbuser, dbpass => $dbpass
-  		 [, AutoCommit => 0|1 ] ... );
+  $sice->db_open(
+  		 dsn => $dsn, 
+		 dbuser => $dbuser, 
+		 dbpass => $dbpass,
+  		 [AutoCommit => 0|1,] 
+		 [RaiseError => 0|1 ]
+		 ... 
+		);
   
-  $sice->db_add(table => $table_name,columns => {field1=>$data1,...});
-  $sice->db_search(table => $table_name 
-  			    [,search => {
-			    		 field1=>$data1 
-					 [,field2=>@array2]
+  $sice->db_add(
+                table 	=> $table_name,
+		columns => {
+			    field1	=> $data1,
+			    [field2	=> $data2,]
+			    [...]
+			   }
+               );
+	       
+  $sice->db_search(
+  		   table => $table_name, 
+		  [search => {
+			      field1=>$data1, 
+			     [field2=>@array2]
 					 ...
-					}                  ]
- 			    [, count =>  field             ]
- 			    [, max   =>  field             ]
- 			    [, min   =>  field             ]			    
+			     }],
+ 		 [ count 	=>  field ],
+		 [ max   	=>  field ],
+		 [ min   	=>  field ],			    
+		 [ columns 	=>  field1, [field2], ... ],			    
+ 		 [ order  =>  fieldN]			    
 		  );
-  $sice->db_update(table => $table_name,search => {field=>$data1,...},
-                                                   columns=>
-						     {field1=>$data1,...
-						  }
-  $sice->db_commit;		  );
-  $sice->db_delete(table => $table_name,search => {field=>$data1,...});
+		  
+  $sice->db_update(
+  		   table => $table_name,
+		   search => {
+		   	      field	=> $data1,
+			      [field2	=> $data2,]
+			      ...
+			     },
+		   columns=> {
+			      field1	=> $data1,
+			      ...
+	  		     }
+	          );
+		  
+  $sice->db_commit;
+  		
+  $sice->db_delete(
+  		   table => $table_name,
+		   search => {
+		   	      field	=> $data1,
+			      ...
+			     }
+		  );
   
   $sice->{debug} = 1 ; # turn on debugging
   $sice->{debug} = 0 ; # turn off debugging
@@ -92,7 +129,7 @@ database access do not necessarily need to write SQL.
   # SQLite, Postgres, and MySQL are supported, with default
   # quoting assumed for others.  You can change this as needed.
   
-  $sice->close; 
+  $sice->db_close; 
 
 The session handle is available under the object as $sice->{_sth}
 
@@ -103,7 +140,7 @@ The session handle is available under the object as $sice->{_sth}
 =item db_open(dsn => $dsn, dbuser => $dbuser, dbpass => $dbpass  )
 
 The C<db_open> method returns a database handle attached to
-$self->{_dbh}.  RaiseError and AutoCommit default
+$self->{_dbh}.  RaiseError defaults to 0 and AutoCommit defaults
 to 1.  This function attaches the object to a database.
 As long as the DBD/DBI supports it, you may have multiple 
 independent objects connected to the same database.
@@ -187,8 +224,14 @@ the module will do the right thing and generate
 So if you performed this call like this:
 
     $sice->db_search(
-    		   table   =>"users",
-		   search => { username => ["Tom","Dick","Harry"] }
+    		   table	=>"users",
+		   search 	=> { 
+		   		    username => [
+				    		 "Tom",
+						 "Dick",
+						 "Harry"
+						] 
+				   }
 		 );
 
 the module will generate the query as
@@ -196,16 +239,68 @@ the module will generate the query as
    select from "users" where "username" in ("Tom", "Dick", "Harry");
    
 This functionality is not yet in other methods than the search module.  
-This will change in short order.
+This may change in future releases.
+
+Also, if you want to return only some of the columns in the database,
+you could use the columns => "comma,separated,list,of,columns,to,return"
+option
+
+    $sice->db_search(
+    		   table	=>"users",
+		   search 	=> { 
+		   		    username => [
+				    		 "Tom",
+						 "Dick",
+						 "Harry"
+						] 
+				   },
+		   columns	=> "name,date,uid,homedir"
+		 );
+
+And if you wanted to pre-order the output records, use the order=>field
+option
+
+    $sice->db_search(
+    		   table	=>"users",
+		   search 	=> { 
+		   		    username => [
+				    		 "Tom",
+						 "Dick",
+						 "Harry"
+						] 
+				   },
+		   columns	=> "name,date,uid,homedir",
+		   order	=> "uid"
+		 );
+
+or
+
+    $sice->db_search(
+    		   table	=>"users",
+		   search 	=> { 
+		   		    username => [
+				    		 "Tom",
+						 "Dick",
+						 "Harry"
+						] 
+				   },
+		   order	=> "uid"
+		 );
+
+
 
 If the select operation failed or generated errors or warnings, you
-will be able to check for the existence of and inspect $sice->{error}.
-As each DBD is different, no two different DBDs will generate the same 
-error messages or error codes.  As many fields as are relevant in the 
-particular table may be used.  The search=> may be completely omitted 
-to give a "SELECT * from table" effect.  The results are returned as
-a DBI session handle, and any of the DBI methods may be used to
-extract the data at this point.
+will be able to check for the existence of and inspect 
+$sice->{failed}->{error} and if the DBD developer provided an error 
+code, it would be in $sice->{failed}->{code}.  As each DBD is 
+different, no two different DBDs will generate the same error 
+messages or error codes.  
+
+As many fields as are relevant in the  particular table may be used.  The
+search=> may be completely omitted  to give a "SELECT * from table"
+effect.  The results are returned as a DBI session handle, and any of the
+DBI methods may be used to extract the data at this point.  See the
+DBI man page for the methods.  
 
   foreach (sort keys %{$sice->{_sth}->fetchall_hashref('username')} )
     {
@@ -246,19 +341,15 @@ username, we can do something like this:
     use DBIx::SimplePerl;
     my $sice = DBIx::SimplePerl->new;        
     $sice->db_open(
-                    'dsn'    => "dbi:SQLite:dbname=/etc/cluster/cluster.db",
-                    'dbuser' => "",
-                    'dbpass' => ""
+		  'dsn'    => "dbi:SQLite:dbname=/etc/cluster/cluster.db",
+		  'dbuser' => "",
+	          'dbpass' => ""
                   );
   
     $sice->db_update(
     		   table   =>"users",
-		   search  => {
-		   		username => $username		
-		   	      },
-		   columns => {
-		   		homedir => $new_homedir
-		   	      }
+		   search  => { username => $username    },
+		   columns => { homedir  => $new_homedir }
 		 );
 
 and the method will generate the appropriate SQL to perform this 
@@ -281,8 +372,8 @@ method call succeeded.  Error messages (if generated) would be
 stored in the anonymous hash's "failed" key.  Lack of existence of
 this key is another indicator of success. 
 
-=item db_commit
 
+=item db_commit
 
 The C<db_commit> method will perform an explicit commit on the 
 db handle.  This is useful when AutoCommit is set to 0.  Note that 
@@ -405,8 +496,7 @@ sub db_open
     {
       my ($self,%args) = @_;
       my ($dsn,$dbuser,$dbpass,$options,%rc,$dbh,$tmp,$name,$autocommit);
-      my ($remaining,$raiseerror,@opts,%attr);
-      
+      my ($remaining,$raiseerror,@opts,%attr);      
       
       printf STDERR "D[%s] db_open: args -> \'%s\'\n",$$,join(":",keys(%args)) if ($self->{debug});
 	
@@ -428,12 +518,16 @@ sub db_open
 	}
       foreach (keys %args)
        {
-        $attr{$_}=$args{$_} if (($_ ne "dsn") && ($_ ne "dbuser")&& ($_ ne "dbpass")) ;	 
+        $attr{$_}=$args{$_} if (
+				($_ ne "dsn") && 
+				($_ ne "dbuser") && 
+				($_ ne "dbpass")
+			       ) ;	 
        }      
       # construct remaining arg string
       $remaining	= "";
       $attr{'AutoCommit'} = 1 if (!defined($attr{AutoCommit}));
-      $attr{'RaiseError'} = 1 if (!defined($attr{RaiseError}));
+      $attr{'RaiseError'} = 0 if (!defined($attr{RaiseError}));
       map { push @opts,(sprintf "%s => %s",$_,$attr{$_}) } (keys %attr) ;
 
       $remaining = join(", ",@opts);
@@ -441,6 +535,7 @@ sub db_open
 	 
       # connect to DB
       $self->{_dbh}	= false;
+      #$self->{_sth} 	= false;
        
       $self->{_dbh}= DBI->connect(
 	    			  $dsn, 
@@ -449,25 +544,10 @@ sub db_open
 				  \%attr
 				 );
 	  
-      if (
-          (defined($self->{_dbh} )) 	&& 
-	  (defined($self->{_dbh}->err))	&& 
-	  ($self->{_dbh}->err)
-	 )
-	 {
-	   printf STDERR "D[%s]: DBIx::SimplePerl database error \'%s\'\n",$$,$self->{_dbh}->err  if ($self->{debug});
-	   %rc= ( 
-	   	 'failed' => {
-		 	      'error'	=> $self->{_dbh}->errstr , 
-			      'code'	=> $self->{_dbh}->err 
-			     } 
-		);
-           return \%rc;
-	 }
-	else
-	 {
-	   printf STDERR "D[%s]: DBIx::SimplePerl database connection succeeded\n",$$ if ($self->{debug});   
-	 }
+      %rc=%{$self->_check_and_return_if_error};
+      return \%rc if ($rc{failed});
+      
+      printf STDERR "D[%s]: DBIx::SimplePerl database connection succeeded\n",$$ if ($self->{debug});   
       %rc= ( 'success' => true );
       printf STDERR "D[%s]: DBIx::SimplePerl database connection dump = %s\n",$$,Dumper($self) if ($self->{debug});   
       # handle field quoting
@@ -546,53 +626,18 @@ sub db_add
       printf STDERR "D[%s] db_add: prepare = \'%s\' \n",
 	   $$,$prep  if ($self->{debug});
       # compile it
-      eval { $self->{_sth} = $self->{_dbh}->prepare($prep) };
-      if (
-          (defined($self->{_sth} )) 	&& 
-	  (defined($self->{_sth}->err))	&& 
-	  ($self->{_sth}->err)
-	 )
-	 {
-	   printf STDERR "D[%s] db_add: prepare failed with error \'%s\'\n\n\tprepare=\'%s\'\n",
-	   $$,$self->{_sth}->err,$prep  if ($self->{debug});
-	   %rc= ( 
-	   	 'failed' => {
-		 	      'error'	=> $self->{_sth}->errstr , 
-			      'code'	=> $self->{_sth}->err,
-			      'prepare'	=> $prep
-			     } 
-		);
-           return \%rc;
-	 }
-	else
-	 {
-	   printf STDERR "D[%s] db_add: prepare succeeded\n",$$ if ($self->{debug});   
-	 }
+      $self->{_sth} = $self->{_dbh}->prepare($prep) ;
+      %rc=%{$self->_check_and_return_if_error};
+      return \%rc if ($rc{failed});
       
+      printf STDERR "D[%s] db_add: prepare succeeded\n",$$ if ($self->{debug});   
+	       
       # execute it ...
-      eval { $self->{_sth}->execute(); };
-      if (
-          (defined($self->{_sth} )) 	&& 
-	  (defined($self->{_sth}->err))	&& 
-	  ($self->{_sth}->err)
-	 )
-	 {
-	   printf STDERR "D[%s] db_add: execute failed with error \'%s\'\n",
-	   $$,$self->{_sth}->err  if ($self->{debug});
-	   %rc= ( 
-	   	 'failed' => {
-		 	      'error'	=> $self->{_sth}->errstr , 
-			      'code'	=> $self->{_sth}->err,
-			      'prepare'	=> $prep
-			     } 
-		);
-           return \%rc;
-	 }
-	else
-	 {
-	   printf STDERR "D[%s] db_add: execute succeeded\n",$$ if ($self->{debug});   
-	 }
-            
+      $self->{_sth}->execute(); 
+      %rc=%{$self->_check_and_return_if_error};
+      return \%rc if ($rc{failed});
+      
+      printf STDERR "D[%s] db_add: execute succeeded\n",$$ if ($self->{debug});   	            
       %rc= ( 'success' => true );
       return \%rc;
     }   
@@ -601,16 +646,18 @@ sub db_search
     {
       my ($self,%args)=@_;
       my ($table,$search,$prep,%rc,@fields,@values,@q_fields,$order);
-      my ($count, $max, $min, $boolean, $in_variant,$v_values);
+      my ($count, $max, $min, $boolean, $in_variant,$v_values,$cols);
       
       # quick error check    
-      foreach (qw(table search order count max min boolean))
+      $cols = "*";
+      foreach (qw(table search order count max min boolean columns))
         {
 	 if (exists($args{$_})) 
             { 
 	      $table	= $self->_quote_table($args{$_}) if ($_ eq 'table');
 	      $search	= $args{$_} if ($_ eq 'search');
 	      $order	= $args{$_} if ($_ eq 'order');
+	      $cols	= $args{$_} if ($_ eq 'columns');
 	      $count	= $args{$_} if ($_ eq 'count');
 	      $max	= $args{$_} if ($_ eq 'max');
 	      $min	= $args{$_} if ($_ eq 'min');
@@ -634,7 +681,7 @@ sub db_search
          {
 	  if ( (!defined($count)) && (!defined($min)) && (!defined($max)) )
 	   {
-	    $prep  = sprintf 'SELECT * FROM %s',$table;
+	    $prep  = sprintf 'SELECT %s FROM %s',$cols,$table;
 	   }
 	  elsif (defined($count))
 	   {
@@ -652,7 +699,7 @@ sub db_search
 	else
 	 {
 
-	  $prep  = sprintf 'SELECT * FROM %s WHERE ',$table;      
+	  $prep  = sprintf 'SELECT %s FROM %s WHERE ',$cols,$table;      
 	  # extract fields and values from the columns
 	  @fields=(keys %{$search});
           map { push @q_fields,$self->_quote_field($_) } @fields;
@@ -712,53 +759,19 @@ sub db_search
 	   $$,$prep  if ($self->{debug});
 
       # compile it
-      eval { $self->{_sth} = $self->{_dbh}->prepare($prep) };
-      if (
-          (defined($self->{_sth} )) 	&& 
-	  (defined($self->{_sth}->err))	&& 
-	  ($self->{_sth}->err)
-	 )
-	 {
-	   printf STDERR "D[%s] db_search: prepare failed with error \'%s\'\n\n\tprepare=\'%s\'\n",
-	   $$,$self->{_sth}->err,$prep  if ($self->{debug});
-	   %rc= ( 
-	   	 'failed' => {
-		 	      'error'	=> $self->{_sth}->errstr , 
-			      'code'	=> $self->{_sth}->err,
-			      'prepare'	=> $prep
-			     } 
-		);
-           return \%rc;
-	 }
-	else
-	 {
-	   printf STDERR "D[%s] db_search: prepare succeeded\nprepare: %s\n",$$,$prep if ($self->{debug});   
-	 }
+      $self->{_sth} = $self->{_dbh}->prepare($prep);
+      %rc=%{$self->_check_and_return_if_error};
+      return \%rc if ($rc{failed});
+
+      printf STDERR "D[%s] db_search: prepare succeeded\nprepare: %s\n",$$,$prep if ($self->{debug});   
+	 
       
       # execute it ...
       printf STDERR "D[%s] db_search: executing search\n",$$ if ($self->{debug});
-      eval { $self->{_sth}->execute(); };
-      if (
-          (defined($self->{_sth} )) 	&& 
-	  (defined($self->{_sth}->err))	&& 
-	  ($self->{_sth}->err)
-	 )
-	 {
-	   printf STDERR "D[%s] db_search: execute failed with error \'%s\'\n",
-	   $$,$self->{_sth}->err  if ($self->{debug});
-	   %rc= ( 
-	   	 'failed' => {
-		 	      'error'	=> $self->{_sth}->errstr , 
-			      'code'	=> $self->{_sth}->err,
-			      'prepare'	=> $prep
-			     } 
-		);
-           return \%rc;
-	 }
-	else
-	 {
-	   printf STDERR "D[%s] db_search: execute succeeded\n",$$ if ($self->{debug});   
-	 }
+      $self->{_sth}->execute();
+      %rc=%{$self->_check_and_return_if_error};
+      return \%rc if ($rc{failed});
+      printf STDERR "D[%s] db_search: execute succeeded\n",$$ if ($self->{debug});   	
       
       %rc= ( 'success' => true );
       return \%rc;
@@ -818,52 +831,17 @@ sub db_update
       
 
       # compile it
-      eval { $self->{_sth} = $self->{_dbh}->prepare($prep) };
-      if (
-          (defined($self->{_sth} )) 	&& 
-	  (defined($self->{_sth}->err))	&& 
-	  ($self->{_sth}->err)
-	 )
-	 {
-	   printf STDERR "D[%s] db_update: prepare failed with error \'%s\'\n\n\tprepare=\'%s\'\n",
-	   $$,$self->{_sth}->err,$prep  if ($self->{debug});
-	   %rc= ( 
-	   	 'failed' => {
-		 	      'error'	=> $self->{_sth}->errstr , 
-			      'code'	=> $self->{_sth}->err,
-			      'prepare'	=> $prep
-			     } 
-		);
-           return \%rc;
-	 }
-	else
-	 {
-	   printf STDERR "D[%s] db_update: prepare succeeded\n",$$ if ($self->{debug});   
-	 }
+      $self->{_sth} = $self->{_dbh}->prepare($prep) ;
+      %rc=%{$self->_check_and_return_if_error};
+      return \%rc if ($rc{failed});
+      printf STDERR "D[%s] db_update: prepare succeeded\n",$$ if ($self->{debug});   
+	
       
       # execute it ...
-      eval { $self->{_sth}->execute(); };
-      if (
-          (defined($self->{_sth} )) 	&& 
-	  (defined($self->{_sth}->err))	&& 
-	  ($self->{_sth}->err)
-	 )
-	 {
-	   printf STDERR "D[%s] db_update: execute failed with error \'%s\'\n",
-	   $$,$self->{_sth}->err  if ($self->{debug});
-	   %rc= ( 
-	   	 'failed' => {
-		 	      'error'	=> $self->{_sth}->errstr , 
-			      'code'	=> $self->{_sth}->err,
-			      'prepare'	=> $prep
-			     } 
-		);
-           return \%rc;
-	 }
-	else
-	 {
-	   printf STDERR "D[%s] db_update: execute succeeded\n",$$ if ($self->{debug});   
-	 }
+      $self->{_sth}->execute();
+      %rc=%{$self->_check_and_return_if_error};
+      return \%rc if ($rc{failed});
+      printf STDERR "D[%s] db_update: execute succeeded\n",$$ if ($self->{debug});   
       
       %rc= ( 'success' => true );
       return \%rc;
@@ -912,53 +890,16 @@ sub db_delete
      
 
       # compile it
-      eval { $self->{_sth} = $self->{_dbh}->prepare($prep) };
-      if (
-          (defined($self->{_sth} )) 	&& 
-	  (defined($self->{_sth}->err))	&& 
-	  ($self->{_sth}->err)
-	 )
-	 {
-	   printf STDERR "D[%s] db_delete: prepare failed with error \'%s\'\n\n\tprepare=\'%s\'\n",
-	   $$,$self->{_sth}->err,$prep  if ($self->{debug});
-	   %rc= ( 
-	   	 'failed' => {
-		 	      'error'	=> $self->{_sth}->errstr , 
-			      'code'	=> $self->{_sth}->err,
-			      'prepare'	=> $prep
-			     } 
-		);
-           return \%rc;
-	 }
-	else
-	 {
-	   printf STDERR "D[%s] db_delete: prepare succeeded\n",$$ if ($self->{debug});   
-	 }
+      $self->{_sth} = $self->{_dbh}->prepare($prep);
+      %rc=%{$self->_check_and_return_if_error};
+      return \%rc if ($rc{failed});
+      printf STDERR "D[%s] db_delete: prepare succeeded\n",$$ if ($self->{debug});   
       
       # execute it ...
-      eval { $self->{_sth}->execute(); };
-      if (
-          (defined($self->{_sth} )) 	&& 
-	  (defined($self->{_sth}->err))	&& 
-	  ($self->{_sth}->err)
-	 )
-	 {
-	   printf STDERR "D[%s] db_delete: execute failed with error \'%s\'\n",
-	   $$,$self->{_sth}->err  if ($self->{debug});
-	   %rc= ( 
-	   	 'failed' => {
-		 	      'error'	=> $self->{_sth}->errstr , 
-			      'code'	=> $self->{_sth}->err,
-			      'prepare'	=> $prep
-			     } 
-		);
-           return \%rc;
-	 }
-	else
-	 {
-	   printf STDERR "D[%s] db_delete: execute succeeded\n",$$ if ($self->{debug});   
-	 }
-      
+      $self->{_sth}->execute();
+      %rc=%{$self->_check_and_return_if_error};
+      return \%rc if ($rc{failed});
+      printf STDERR "D[%s] db_delete: execute succeeded\n",$$ if ($self->{debug});         
       
       %rc= ( 'success' => true );
       return \%rc;
@@ -971,25 +912,11 @@ sub db_close
       if (defined($self->{_sth})) { undef $self->{_sth} ; }
       $self->{_dbh}->disconnect();      
       printf STDERR "D[%s] db_close\n",$$ if ($self->{debug});
-      if (
-          (defined($self->{_dbh} )) 	&& 
-	  (defined($self->{_dbh}->errstr))	
-	 )
-	 {
-	   printf STDERR "D[%s] db_close: disconnect failed with error \'%s\'\n",
-	   $$,$self->{_dbh}->errstr  if ($self->{debug});
-	   %rc= ( 
-	   	 'failed' => {
-		 	      'error'	=> $self->{_dbh}->errstr , 
-			     } 
-		);
-	   return \%rc;        
-	 }     
-	else
-	 {
-	   %rc= (  'success' => true );
-	   return \%rc;
-	 } 
+      %rc=%{$self->_check_and_return_if_error};
+      return \%rc if ($rc{failed});
+      
+      %rc= (  'success' => true );
+      return \%rc;	 
     } 
 
 sub db_commit
@@ -998,25 +925,11 @@ sub db_commit
       my %rc;
       $self->{_dbh}->commit() if (defined($self->{_dbh}));      
       printf STDERR "D[%s] db_commit\n",$$ if ($self->{debug});
-      if (
-          (defined($self->{_dbh} )) 	&& 
-	  (defined($self->{_dbh}->errstr))	
-	 )
-	 {
-	   printf STDERR "D[%s] db_commit: commit failed with error \'%s\'\n",
-	   $$,$self->{_dbh}->errstr  if ($self->{debug});
-	   %rc= ( 
-	   	 'failed' => {
-		 	      'error'	=> $self->{_dbh}->errstr , 
-			     } 
-		);
-	   return \%rc;    
-	 }
-	else
-	 {
-	   %rc= (  'success' => true );
-	   return \%rc;
-	 } 
+      %rc=%{$self->_check_and_return_if_error};
+      return \%rc if ($rc{failed});
+
+      %rc= (  'success' => true );
+      return \%rc;
     }
     
 sub db_create_table
@@ -1063,53 +976,17 @@ sub db_create_table
       printf STDERR "D[%s] db_create_table: SQL=\'%s\'\n",$$,$prep  if ($self->{debug});
 
       # compile it
-      eval { $self->{_sth} = $self->{_dbh}->prepare($prep) };
-      if (
-          (defined($self->{_sth} )) 	&& 
-	  (defined($self->{_sth}->err))	&& 
-	  ($self->{_sth}->err)
-	 )
-	 {
-	   printf STDERR "D[%s] db_create_table: prepare failed with error \'%s\'\n\n\tprepare=\'%s\'\n",
-	   $$,$self->{_sth}->err,$prep  if ($self->{debug});
-	   %rc= ( 
-	   	 'failed' => {
-		 	      'error'	=> $self->{_sth}->errstr , 
-			      'code'	=> $self->{_sth}->err,
-			      'prepare'	=> $prep
-			     } 
-		);
-           return \%rc;
-	 }
-	else
-	 {
-	   printf STDERR "D[%s] db_create_table: prepare succeeded\n",$$ if ($self->{debug});   	
-	 }
+      $self->{_sth} = $self->{_dbh}->prepare($prep);
+      %rc=%{$self->_check_and_return_if_error};
+      return \%rc if ($rc{failed});           
+      printf STDERR "D[%s] db_create_table: prepare succeeded\n",$$ if ($self->{debug});   	
       
       # execute it ...
-      eval { $self->{_sth}->execute(); };
-      if (
-          (defined($self->{_sth} )) 	&& 
-	  (defined($self->{_sth}->err))	&& 
-	  ($self->{_sth}->err)
-	 )
-	 {
-	   printf STDERR "D[%s] db_create: execute failed with error \'%s\'\n",
-	   $$,$self->{_sth}->err  if ($self->{debug});
-	   %rc= ( 
-	   	 'failed' => {
-		 	      'error'	=> $self->{_sth}->errstr , 
-			      'code'	=> $self->{_sth}->err,
-			      'prepare'	=> $prep
-			     } 
-		);
-           return \%rc;
-	 }
-	else
-	 {
-	   printf STDERR "D[%s] db_create_table: execute succeeded\n",$$ if ($self->{debug});   
-	 }
-            
+      $self->{_sth}->execute(); 
+      %rc=%{$self->_check_and_return_if_error};
+      return \%rc if ($rc{failed});
+      printf STDERR "D[%s] db_create_table: execute succeeded\n",$$ if ($self->{debug});   
+ 
       %rc= ( 'success' => true );
       return \%rc;
     }   
@@ -1140,6 +1017,42 @@ sub _quote_value
 			$value,
 			$self->{quote}->{value};
       return $_x;
+    }
+
+sub _check_and_return_if_error
+    {
+      my ($self) = @_;
+      my %rc;
+      if ( 
+	  (defined($self->{_dbh}->err))	&& 
+	  ($self->{_dbh}->err)
+	 )
+	 {
+	   printf STDERR "D[%s]: DBIx::SimplePerl database error \'%s\'\n",$$,$self->{_dbh}->err  if ($self->{debug});
+	   %rc= ( 
+	   	 'failed' => {
+		 	      'error'	=> $self->{_dbh}->errstr , 
+			      'code'	=> $self->{_dbh}->err 
+			     } 
+		);
+           return \%rc;
+	 }
+	 
+      if (
+          (defined($self->{_sth} )) 	&& 
+	  (defined($self->{_sth}->err))	&& 
+	  ($self->{_sth}->err)
+	 )
+	 {
+	   printf STDERR "D[%s]: DBIx::SimplePerl session handle error \'%s\'\n",$$,$self->{_sth}->err  if ($self->{debug});
+	   %rc= ( 
+	   	 'failed' => {
+		 	      'error'	=> $self->{_sth}->errstr , 
+			      'code'	=> $self->{_sth}->err 
+			     } 
+		);
+           return \%rc;
+	 }
     }
 =cut
 =pod
@@ -1218,13 +1131,14 @@ watch the SQL that is generated.
 =head1 WHY
 
 Why hide SQL?  That question should answer itself, especially in
-programs not requiring the full firepower of a Class::DBI or most
-of the DBI methods.   It is fairly easy to make a mistake in the
-SQL you generate, and debugging  it can be annoying.  This was the
-driving force behind this particular  module.  The SQL that is
-generated is fairly simple minded.  It is executed,  and results
-returned.  If it fails, this is also caught and what DBI thinks is
-the reason it failed is returned as the $object->{failed} message.
+programs not requiring the full firepower of a Class::DBI,
+DBIx::Class or most of the DBI methods.   It is fairly easy to
+make a mistake in the SQL you generate, and debugging  it can be
+annoying.  This was the driving force behind this particular 
+module.  The SQL that is generated is fairly simple minded.  It
+is executed,  and results returned.  If it fails, this is also
+caught and what DBI thinks is the reason it failed is returned as
+the $object->{failed} message.
 
 This module is not for the folks who need the full firepower of
 most of the rest of DBI.  This module is for simple programs.  If
@@ -1232,8 +1146,8 @@ you exceed the  capabilities of this module, then please look to
 one of the other modules that do DBs.  
 
 The approach to this module is simplicity.  It is intended to be
-robust  for basic applications, and it is used in a commercial
-product.
+robust  for basic applications, and it is used in a few commercial
+products.
 
 =head1 AUTHOR
 
@@ -1242,7 +1156,7 @@ Joe Landman (landman@scalableinformatics.com)
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003-2005 Scalable Informatics LLC.  All rights
+Copyright (c) 2003-2006 Scalable Informatics LLC.  All rights
 reserved.
 
 This library is free software; you can redistribute it and/or
@@ -1264,6 +1178,10 @@ This module is known to work without noticable issues on DBD::SQLite,
 DBD::Mysql, DBD::Pg.  Others may or may not work, depending upon
 how compatible they are with the specs in DBI for DBD module writers.
 
+Note: as of 1.50, RaiseError is set to 0.  If you want the code to 
+throw a signal upon an error, set this to 1 when you create the object.
+Also, the handles now are all outside of evals.  This is to make error 
+handling saner.
 =cut
 
 1;

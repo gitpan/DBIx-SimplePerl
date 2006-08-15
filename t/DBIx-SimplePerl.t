@@ -14,9 +14,11 @@ BEGIN { use_ok('DBIx::SimplePerl') };
 # Insert your test code below, the Test::More module is use()ed here so read
 # its man page ( perldoc Test::More ) for help writing this test script.
 
-my ($sice,$rc);
+my ($sice,$rc,$sice2);
 
 $sice	= DBIx::SimplePerl->new({debug=>1});
+$sice2	= DBIx::SimplePerl->new({debug=>1});
+
 isa_ok( $sice, 'DBIx::SimplePerl' );
 ok(defined($sice) eq 1,"instantiated");
 #
@@ -25,8 +27,8 @@ ok(defined($sice) eq 1,"instantiated");
 
 
 SKIP: {
-	eval { require DBD::SQLite };
 
+	eval { require DBD::SQLite };
 	skip "DBD::SQLite not installed", 2 if $@;
 	my $dbname = sprintf "DBIx-SimplePerl.%i.db",$$;
 	$sice->db_open(
@@ -54,6 +56,10 @@ SKIP: {
 	   }
 	   
 	undef $rc;
+	
+	
+	
+	
 	$rc	= $sice->db_add(
 					 table=>"test1",
 					 columns=>{
@@ -303,6 +309,89 @@ SKIP: {
 	     fail("SQLite db_search with vector_in ");
 	     exit;
 	   }
+
+###
+## ERROR TESTS... these are to make sure we can catch/report
+##                error conditions properly
+
+# incorrect table name, should fail....
+	undef $rc;	
+	$rc	= $sice->db_search(
+					 table=>"test3",
+					 min=>"fp"
+					);
+	printf "T[%s] error detection test return %s\n",$$,$rc->{failed}->{error};
+ 	if (defined($rc->{failed}))
+	   {
+	     pass("SQLite erroneous db_search to flag error condition worked\n$rc->{failed}->{error}\n");	     
+	   }
+	  else
+	   {
+	     fail("SQLite erroneous db_search to flag error condition did not work, error condition not flagged");
+	     exit;
+	   }
+
+# incorrect table name, should fail....
+	undef $rc;	
+	$rc	= $sice->db_delete( table=>"test3" );
+	
+ 	if (defined($rc->{failed}))
+	   {
+	     pass("SQLite erroneous db_delete to flag error condition worked\n$rc->{failed}->{error}\n");	     
+	   }
+	  else
+	   {
+	     fail("SQLite erroneous db_delete to flag error condition did not work, error condition not flagged");
+	     exit;
+	   }
+
+# incorrect table name, should fail....
+	undef $rc;	
+	$rc	= $sice->db_update( 
+				   table=>"test3",
+				   search  => {
+                                                username => "1"
+                                              },
+                              	   columns => {
+                                                homedir => "2"
+                                              }
+                                  );
+	
+ 	if (defined($rc->{failed}))
+	   {
+	     pass("SQLite erroneous db_update to flag error condition worked\n$rc->{failed}->{error}\n");	     
+	   }
+	  else
+	   {
+	     fail("SQLite erroneous db_update to flag error condition did not work, error condition not flagged");
+	     exit;
+	   }
+
+# incorrectly built object, should fail....
+	undef $rc;
+	my $sice2 =	
+	$rc	= $sice->db_update( 
+				   table=>"test3", 
+				   search  => {
+                                                username => "1"
+                                              },
+                              	   columns => {
+                                                homedir => "2"
+                                              }
+                                  );
+	
+ 	if (defined($rc->{failed}))
+	   {
+	     pass("SQLite db_update to flag unopened database error condition worked\n$rc->{failed}->{error}\n");	     
+	   }
+	  else
+	   {
+	     fail("SQLite db_update to flag unopened database error condition did not work, error condition not flagged");
+	     exit;
+	   }
+
+###
+
 
 	
 	$rc	= $sice->db_close;

@@ -1,5 +1,16 @@
 Revision history for Perl extension DBIx::SimplePerl.
 
+1.50 Mon Aug 14 20:50:00 2006
+	- Major changes/simplification to the error detection code
+	- Simplification of error checking
+	- Documentation fixes and extensions to include new features
+	- Improved behavior and consistency in the face of errors
+	- Trimmed uneeded code, module is smaller than it was before ...
+	- Added internal function to handle replicated internal code
+	- Tests added to check errors ...
+1.42 Mon Aug 14 15:09:00 2006
+	- added order and cols to db_search.  Order sorts by that column, and cols
+          returns only those columns that you specify
 1.41 Sun Jun 25 20:30:01 2006
 	- added boolean condition search
 1.40 Sun Jun 25 02:30:01 2006
