@@ -1,5 +1,15 @@
 Revision history for Perl extension DBIx::SimplePerl.
 
+1.70 Sun Apr 29 20:26:00 2007
+	- fixed db_next, db_rows, db_rollback, db_ping.  Sadly, some of these
+	  are broken in DBI/DBD::SQLite.  This means that it will be hard to test
+	  db_ping and db_rows for now.
+	- cleaned up code a little
+	- added db_next test cases, and a few others.  db_next is a very sane
+	  method for getting the next row hash.
+1.60 Sat Mar 17 14:40:00 2007
+	- added a saner OO iterator to return the next record in a query
+
 1.50 Mon Aug 14 20:50:00 2006
 	- Major changes/simplification to the error detection code
 	- Simplification of error checking

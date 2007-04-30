@@ -1,7 +1,9 @@
 Changes
 lib/DBIx/SimplePerl.pm
+examples/ex1.pl
 Makefile.PL
 MANIFEST
 META.yml			Module meta-data (added by MakeMaker)
 README
+LICENSE
 t/DBIx-SimplePerl.t

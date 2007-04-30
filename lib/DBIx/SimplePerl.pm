@@ -14,7 +14,7 @@ use Data::Dumper;
 use constant true => (1==1);
 use constant false => (1==0);
 
-our $VERSION = '1.50';
+our $VERSION = '1.70';
 
 
 # Preloaded methods go here.
@@ -116,9 +116,24 @@ database access do not necessarily need to write SQL.
 			      ...
 			     }
 		  );
+		  
+  my @q_keys,@q_values,$que;		  
+  while ($sice->db_next())
+   {
+     @q_keys = keys %$_;
+     foreach $que (@q_keys) 
+      { 
+       printf "key = %s, value =\'%s\'\n",$que,$_{$que};
+      }
+   }
   
+  $sice->db_trace(level => $number);	# turn on DBI tracing		   
+  $sice->db_rows;			# return rows affected by session handle
+  $rc=$sice->db_ping;			# perform a db_ping call
   $sice->{debug} = 1 ; # turn on debugging
   $sice->{debug} = 0 ; # turn off debugging
+  $sice->db_rollback;  # roll back a transaction
+  
   
   # quoting for table, field, and value is set by default
   # you can override it during or after creating the object.
@@ -298,26 +313,14 @@ messages or error codes.
 
 As many fields as are relevant in the  particular table may be used.  The
 search=> may be completely omitted  to give a "SELECT * from table"
-effect.  The results are returned as a DBI session handle, and any of the
-DBI methods may be used to extract the data at this point.  See the
-DBI man page for the methods.  
+effect.  The results are returned as a DBI session handle within the 
+object instance.  To extract the data, use the db_next method. 
 
-  foreach (sort keys %{$sice->{_sth}->fetchall_hashref('username')} )
-    {
-      printf "name = \'%s\'\n",$_;
-    }
+while ($sice->db_next)
+ {
+  # do something with the $_ hashref to the query results
+ }
 
-We recommend using something like this:
-
-  $q=($sice->{_sth}->fetchall_hashref('username'));
-  foreach (sort keys %{$q} )
-    {
-      printf "name = \'%s\'\n",$_;
-    }
-
-as it will be simple to access the records fields as 
-
-  $q->{$_}->{field_name}
   
 If the select succeeds, then the $sice->db_search... will 
 return an anonymous hash with a key named "success".  Testing
@@ -905,6 +908,80 @@ sub db_delete
       return \%rc;
     }   
 
+sub db_next
+    {
+	use Data::Dumper;
+      my ($self,%args)=@_;
+      my $rc;      
+      # quick sanity check: return undef if no session handle to query from
+      return undef if (!($self->{_sth}));
+      printf STDERR "D[%s] db_next: returning hashref\n",$$ if ($self->{debug});  
+      $rc= $self->{_sth}->fetchrow_hashref;
+      return $rc;
+    }   
+
+sub db_rows
+    {
+      my ($self,%args)=@_;
+      my $rc; 
+      # quick sanity check: return undef if no session handle to query from
+      return undef if (!($self->{_sth}));
+      $rc=$self->{_sth}->rows;
+      printf STDERR "D[%s] db_rows: returning %s\n",$$,$rc if ($self->{debug});  
+      return $rc;
+    }
+
+sub db_ping
+    {
+      my ($self,%args)=@_;
+      # quick sanity check: return undef if no db handle set up
+      return undef if (!($self->{_dbh}));
+      return $self->{_dbh}->ping;
+    }    
+
+sub db_rollback
+    {
+      my ($self,%args)=@_;
+      # quick sanity check: return undef if no db handle set up
+      return undef if (!($self->{_dbh}));
+      eval { $self->{_dbh}->rollback; };
+      return $@;
+    }      
+    
+sub db_trace
+    {
+      my ($self,%args)=@_;
+      my ($level,$file);
+      if (!($self->{_dbh}))
+       {
+        my %rc= ( 'failed' => {'error' => "no database connection to trace" } );
+	return \%rc;
+       }
+      foreach (qw(level file))
+        {
+	 if (exists($args{$_})) 
+            { 
+	     $level	= $args{$_} if ($_ eq 'level');
+	     $file	= $args{$_} if ($_ eq 'file');
+	    }
+	   else
+	    {
+	     my %rc= ( 'failed' => {'error' => "no $_ specified" } );
+	     return \%rc;
+	    }
+	} 
+      if (!$file)
+       {
+        $self->{_dbh}->trace($level);
+       }
+       else
+       {
+        $self->{_dbh}->trace($level,$file);
+       
+       }
+      # quick sanity check: return undef if no session handle to query from
+      return $self->{_sth}->fetchrow_hashref;
+    }   
 sub db_close
     {
       my ($self )=shift;
@@ -1156,7 +1233,7 @@ Joe Landman (landman@scalableinformatics.com)
 
 =head1 COPYRIGHT
 
-Copyright (c) 2003-2006 Scalable Informatics LLC.  All rights
+Copyright (c) 2003-2007 Scalable Informatics LLC.  All rights
 reserved.
 
 This library is free software; you can redistribute it and/or

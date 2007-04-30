@@ -7,6 +7,7 @@
 
 #use Test::More tests => 3;
 use Test::More qw(no_plan);
+use Data::Dumper;
 BEGIN { use_ok('DBIx::SimplePerl') };
 
 #########################
@@ -310,11 +311,41 @@ SKIP: {
 	     exit;
 	   }
 
-###
-## ERROR TESTS... these are to make sure we can catch/report
-##                error conditions properly
+	undef $rc;
+	$rc	= $sice->db_ping();
+	
+ 	if ($rc)
+	   {
+	     pass("SQLite db_ping");	     
+	   }
+	  else
+	   {
+	     fail("SQLite db_ping ");
+	     exit;
+	   }
 
-# incorrect table name, should fail....
+	undef $rc;
+	$rc	= $sice->db_search(
+					 table=>"test2",
+					 search=>{"number" => [10,20,30]}
+					);
+        my $rows=$sice->db_rows;
+        printf STDERR "rows=%s\n",$rows; 
+        my $count=0;
+	while (my $q=$sice->db_next()) { $count++;printf STDERR "return=%s\n",Dumper($q); }
+ 	if ($count == 3)
+	   {
+	     pass("SQLite db_next");	     
+	   }
+	  else
+	   {
+	     fail("SQLite db_next count=$count ");
+	     exit;
+	   }
+
+printf STDERR "\n\n## ERROR TESTS... these are to make sure we can catch/report
+## error conditions properly
+## incorrect table name, should fail.... without killing the program\n\n";
 	undef $rc;	
 	$rc	= $sice->db_search(
 					 table=>"test3",

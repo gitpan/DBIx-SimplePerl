@@ -1,4 +1,4 @@
-DBIx-SimplePerl version 1.50
+DBIx-SimplePerl version 1.60
 ======================
 
 The README is used to introduce the module and provide instructions on
@@ -34,7 +34,7 @@ COPYRIGHT AND LICENCE
 
 Put the correct copyright and licence information here.
 
-Copyright (C) 2003-2006 by Joseph Landman
+Copyright (C) 2003-2007 by Joseph Landman
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.6 or,

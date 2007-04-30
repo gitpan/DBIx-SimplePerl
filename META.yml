@@ -1,12 +1,15 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         DBIx-SimplePerl
-version:      1.50
-version_from: lib/DBIx/SimplePerl.pm
-installdirs:  site
-requires:
+--- #YAML:1.0
+name:                DBIx-SimplePerl
+version:             1.70
+abstract:            Perlish access to DBI
+license:             ~
+generated_by:        ExtUtils::MakeMaker version 6.32
+distribution_type:   module
+requires:     
     Class::Accessor:               0.22
     DBI:                           1.5
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.30
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.2.html
+    version: 1.2
+author:
+    - Joseph Landman <landman@scalableinformatics.com>
