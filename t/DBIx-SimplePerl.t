@@ -204,7 +204,8 @@ SKIP: {
 					 columns=>{
 					 	    name  => "text",
 						    number=> "integer",
-						    fp    => "number"
+						    fp    => "number",
+						    q	  => "text"
 					 	  }
 					);
  	if (defined($rc->{success}))
@@ -227,12 +228,14 @@ SKIP: {
 	undef $rc;
 	for(my $i=0;$i<100;$i++)
 	 {
+	  $q	= rand();
 	  $rc	= $sice->db_add(
 				table=>"test2",
 				columns=>{
 					  name  => (sprintf "a%i-b",$i),
 					  number=> $i,
-					  fp    => 1.1*$i
+					  fp    => 1.1*$i,
+					  q	=> (($q > 0.5) ? "a" : "b")
 					 }
 				);
 
@@ -279,20 +282,53 @@ SKIP: {
 	     fail("SQLite db_search with max ");
 	     exit;
 	   }
-
 	undef $rc;
 	$rc	= $sice->db_search(
-					 table=>"test1",
-					 min=>"fp"
+					 table=>"test2",
+					 max=>"fp",
+					 columns => { q => 'b' }
 					);
 	
  	if (defined($rc->{success}))
 	   {
-	     pass("SQLite db_search with min");	     
+	     pass("SQLite db_search with max and select");	     
 	   }
 	  else
 	   {
-	     fail("SQLite db_search with min ");
+	     fail("SQLite db_search with max and select ");
+	     exit;
+	   }
+	undef $rc;
+	$rc	= $sice->db_search(
+					 table=>"test1",
+					 min=>"fp",
+					 
+					);
+	
+ 	if (defined($rc->{success}))
+	   {
+	     pass("SQLite db_search with min ");	     
+	   }
+	  else
+	   {
+	     fail("SQLite db_search with min  ");
+	     exit;
+	   }
+
+	undef $rc;
+	$rc	= $sice->db_search(
+					 table=>"test2",
+					 min=>"fp",
+					 columns => { q => 'b' }
+					);
+	
+ 	if (defined($rc->{success}))
+	   {
+	     pass("SQLite db_search with min and select");	     
+	   }
+	  else
+	   {
+	     fail("SQLite db_search with min and select ");
 	     exit;
 	   }
 	undef $rc;

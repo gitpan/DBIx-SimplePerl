@@ -11,10 +11,10 @@ use DBI;
 use POSIX qw(strftime ceil);
 use Data::Dumper;
 
-use constant true => (1==1);
-use constant false => (1==0);
+use constant true 	=> (1==1);
+use constant false 	=> (1==0);
 
-our $VERSION = '1.70';
+our $VERSION = '1.8';
 
 
 # Preloaded methods go here.
@@ -90,7 +90,9 @@ database access do not necessarily need to write SQL.
  		 [ count 	=>  field ],
 		 [ max   	=>  field ],
 		 [ min   	=>  field ],			    
-		 [ columns 	=>  field1, [field2], ... ],			    
+		 [ columns 	=>  { field1, 
+		 		     [field2], ... ]
+				    },			    
  		 [ order  =>  fieldN]			    
 		  );
 		  
@@ -116,19 +118,28 @@ database access do not necessarily need to write SQL.
 			      ...
 			     }
 		  );
-		  
-  my @q_keys,@q_values,$que;		  
-  while ($sice->db_next())
-   {
-     @q_keys = keys %$_;
-     foreach $que (@q_keys) 
-      { 
-       printf "key = %s, value =\'%s\'\n",$que,$_{$que};
-      }
+  
+  # db_next returns the next row as a hash ref		  
+  my $x;		  
+  while ($x=$sice->db_next )
+   {     
+     map { printf "key = %s, value =\'%s\'\n",$_,$x{$_} } keys %{$x};
    }
+  
+  # db_array returns all the rows as an array of hash refs
+  my $x;		  
+  foreach $x (@{$sice->db_array })
+   {     
+     map { printf "key = %s, value =\'%s\'\n",$_,$x{$_} } keys %{$x};
+   }
+  
+   
   
   $sice->db_trace(level => $number);	# turn on DBI tracing		   
   $sice->db_rows;			# return rows affected by session handle
+  					# note that DBI documentation indicates
+					# that the rows method upon which this is
+					# based is effectively useless.
   $rc=$sice->db_ping;			# perform a db_ping call
   $sice->{debug} = 1 ; # turn on debugging
   $sice->{debug} = 0 ; # turn off debugging
@@ -321,6 +332,13 @@ while ($sice->db_next)
   # do something with the $_ hashref to the query results
  }
 
+or if you prefer dealing with arrays, you can use a foreach with
+db_array
+
+foreach (@$sice->db_array)
+ {
+  # do something with the $_ hashref to the query results  
+ }
   
 If the select succeeds, then the $sice->db_search... will 
 return an anonymous hash with a key named "success".  Testing
@@ -330,7 +348,34 @@ stored in the anonymous hash's "failed" key.  Lack of existence of
 this key is another indicator of success.  There is more than one
 way to do it, and these should always be consistent.
 
-=item db_update(table => $table_name, search => {field1=>$data1,...}, columns=> {field1=>$data1,...})
+Of course though, they are not (yet) consistent.  DBI returns 
+
+	function(column) => 'value'
+	
+for the min, max, and count functions.  So if you do a search for the 
+maximum of a set of columns
+
+   $sice->db_search(
+    		     table	=> "users",
+		     max 	=> "uid"
+		   );
+
+then when you query the returned results, be aware that they will
+show up as 
+
+	'max(uid)'	=> value
+	
+using the hashrefs.  Since you don't care about the key, you can  
+extract the first value.
+
+	$max	= (values %{$sice->db_next} )[0];
+	
+This is somewhat convoluted, so assume that this interface will change.
+
+
+=item db_update( table => $table_name, 
+                 search => {field1=>$data1,...}, 
+		 columns=> {field1=>$data1,...});
 
 
 The C<db_update> method will perform an update with an
@@ -650,6 +695,7 @@ sub db_search
       my ($self,%args)=@_;
       my ($table,$search,$prep,%rc,@fields,@values,@q_fields,$order);
       my ($count, $max, $min, $boolean, $in_variant,$v_values,$cols);
+      my ($complex_cols,$specials);
       
       # quick error check    
       $cols = "*";
@@ -674,10 +720,20 @@ sub db_search
 	    
       if ( !defined( $self->{_dbh} ) )
          {
-	   %rc= ( 'failed' => { 'error' => "Database handle does not exist" } );
+	   %rc= ( 'failed' => { 'error' => "Database handle does not exist" });
 	   return \%rc;
 	 }
-      
+
+      # only one of max, min, count.
+      $specials=0;
+      $specials++ if (defined($count));
+      $specials++ if (defined($min));
+      $specials++ if (defined($max));
+      if ( $specials > 1 )
+         {
+	   %rc= ( 'failed' => { 'error' => "only one of MAX, MIN, COUNT can be used at a time in a query" } );
+	   return \%rc;
+	 }
       # if search is not defined, then use simpler form of 
       # search (e.g. select * from table; )
       if (!defined($search))
@@ -699,9 +755,15 @@ sub db_search
 	     $prep  = sprintf 'SELECT min(%s) FROM %s',$min,$table;
 	   }
 	 }
-	else
-	 {
-
+	elsif (
+	      (defined($search)) && 
+	      (
+	       (!defined($count)) && 
+	       (!defined($min)) && 
+	       (!defined($max))
+	      )
+	     )
+	   {
 	  $prep  = sprintf 'SELECT %s FROM %s WHERE ',$cols,$table;      
 	  # extract fields and values from the columns
 	  @fields=(keys %{$search});
@@ -756,6 +818,75 @@ sub db_search
 	      $_count++;
 	     }  
 	   }
+	  }
+	 elsif (
+		(defined($search)) && 
+		(
+		 (defined($count)) ||
+		 (defined($min)) ||
+		 (defined($max))
+		)
+	       )
+	   {
+	  $complex_cols	= sprintf "MAX(%s)",$max if (defined($max));
+	  $complex_cols	= sprintf "MIN(%s)",$min if (defined($min));
+	  $complex_cols	= sprintf "COUNT(%s)",$count if (defined($count));
+	   
+	  $prep  = sprintf 'SELECT %s FROM %s WHERE ',$complex_cols,$table;      
+	  # extract fields and values from the columns
+	  @fields=(keys %{$search});
+          map { push @q_fields,$self->_quote_field($_) } @fields;
+	  $in_variant	=  (1==0);	#force it to false
+	  
+	  # see if we are dealing with a field => [array of values]
+	  # if this is the case, the we need to construct the search
+	  # using the where field in ('value1', 'value2', ... , 'valueN')
+	  map { 
+	        $in_variant = (1==1) if (ref($search->{$_}) eq "ARRAY");
+	      } @fields;
+	      
+	  if (!$in_variant)
+	   {
+	    # normal method, using simple scalar values for fields
+            map { push @values,$self->_quote_value($search->{$_}) } @fields;
+
+	    # create the SQL for the insert
+	    foreach (0 .. $#q_fields)
+              {
+	       $prep .= " AND " if ($_ > 0);
+	       $prep .= sprintf "%s=%s",$q_fields[$_],$values[$_];
+	      }
+	   }
+	   else
+	   {
+	    # more complex method.  First scan through the non-array bits
+	    # and add them.  Then 
+	    
+	    my $_count=1;
+	    foreach (@fields)
+	     { 
+	      $prep .= " AND " if ($_count > 1);
+	      if (ref($search->{$_}) ne "ARRAY")
+	       {
+	        $prep .= sprintf "%s=%s",$self->_quote_field($_),
+		$self->_quote_value($search->{$_});
+	       }
+	       else
+	       {
+	        my $_in_="(";
+		my $_field_=$_;
+		foreach (@{$search->{$_}})
+		 {
+		  $_in_ .= (sprintf "%s, ",$self->_quote_value($_));		  
+		 }
+		$_in_ .= ")";
+		$_in_ =~ s/\,\s+\)$/\)/; # clean up the last comma
+		$prep .= sprintf "%s in %s",$self->_quote_field($_field_),$_in_;
+	       }
+	      $_count++;
+	     }  
+	   } 
+#############	  
          }
       if (defined($order)) { $prep .= (sprintf " ORDER BY %s ",$order)}
       printf STDERR "D[%s] db_search: prepare = \'%s\' \n",
@@ -909,8 +1040,7 @@ sub db_delete
     }   
 
 sub db_next
-    {
-	use Data::Dumper;
+    {	
       my ($self,%args)=@_;
       my $rc;      
       # quick sanity check: return undef if no session handle to query from
@@ -920,6 +1050,17 @@ sub db_next
       return $rc;
     }   
 
+sub db_array
+    {	
+      my ($self,%args)=@_;
+      my $rc;      
+      # quick sanity check: return undef if no session handle to query from
+      return undef if (!($self->{_sth}));
+      printf STDERR "D[%s] db_array: returning array of hashes\n",$$ if ($self->{debug});  
+      $rc= $self->{_sth}->fetchall_arrayref({});
+      return $rc;
+    }   
+    
 sub db_rows
     {
       my ($self,%args)=@_;

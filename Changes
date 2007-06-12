@@ -1,5 +1,12 @@
 Revision history for Perl extension DBIx::SimplePerl.
-
+1.80 Mon Jun 11 23:53:00 2007
+	- fixed db_next to return what it should, and added in
+	  db_array to return an array version of db_next.  Document
+	  these elements in greater detail.
+1.72 Sat Jun  9 12:49:00 2007
+	- fixed min,max,count so that the will work with db_search 
+	  and not interfere with each other.  Added some tests for
+	  this.
 1.70 Sun Apr 29 20:26:00 2007
 	- fixed db_next, db_rows, db_rollback, db_ping.  Sadly, some of these
 	  are broken in DBI/DBD::SQLite.  This means that it will be hard to test
