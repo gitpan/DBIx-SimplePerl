@@ -1,4 +1,12 @@
 Revision history for Perl extension DBIx::SimplePerl.
+1.90 Wed Dec  5 15:33:00 2007
+	- added in operation to set which
+	  operation is used to combine the search fields
+	  in a db_search call.  By default the operation is 
+	  'AND'.  This change gives the user the capability to 
+	  use 'OR' 
+	- added in the "DISTINCT=>column_name(s)" option for
+	  db_search
 1.80 Mon Jun 11 23:53:00 2007
 	- fixed db_next to return what it should, and added in
 	  db_array to return an array version of db_next.  Document

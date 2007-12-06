@@ -245,6 +245,8 @@ SKIP: {
 	       exit;
 	     }	  
 	 }
+	 
+	 
 	undef $rc;
         $rc	= $sice->db_commit; #commit the table
  	if (defined($rc->{failed}))	   
@@ -267,6 +269,50 @@ SKIP: {
 	     fail("SQLite db_search with count ");
 	     exit;
 	   }
+	
+	printf STDERR "**************************  DISTINCT *********** \n";   
+	undef $rc;
+        $rc	= $sice->db_search(
+					 table		=> "test2",
+					 distinct	=> "number",
+					
+					);
+	
+ 	if (defined($rc->{success}))
+	   {
+	     pass("SQLite db_search with distinct");	     
+	   }
+	  else
+	   {
+	     fail("SQLite db_search with distinct ");
+	     exit;
+	   }
+	   
+	  while (my $q=$sice->db_next()) 
+	  {  printf STDERR "distinct return=%s\n",Dumper($q); }
+	  
+	  
+	undef $rc;
+        $rc	= $sice->db_search(
+					 table		=> "test2",
+					 search		=> { 
+					 	"number" => "10" },
+					 search_operator=> "OR"
+					);
+	
+ 	if (defined($rc->{success}))
+	   {
+	     pass("SQLite db_search with search_operator");	     
+	   }
+	  else
+	   {
+	     fail("SQLite db_search with search_operator ");
+	     exit;
+	   }
+	while (my $q=$sice->db_next()) 
+	 {  printf STDERR "search_operator return=%s\n",Dumper($q); }
+	 
+	
 	undef $rc;
 	$rc	= $sice->db_search(
 					 table=>"test1",

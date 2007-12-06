@@ -14,7 +14,7 @@ use Data::Dumper;
 use constant true 	=> (1==1);
 use constant false 	=> (1==0);
 
-our $VERSION = '1.8';
+our $VERSION = '1.90';
 
 
 # Preloaded methods go here.
@@ -87,12 +87,17 @@ database access do not necessarily need to write SQL.
 			     [field2=>@array2]
 					 ...
 			     }],
+                 [ search_operator => 'AND' | 'OR' ]
  		 [ count 	=>  field ],
 		 [ max   	=>  field ],
-		 [ min   	=>  field ],			    
+		 [ min   	=>  field ],
+                 [ distinct     => { field1, 
+		 		     [field2], ... ]
+				    } ],
+                 
 		 [ columns 	=>  { field1, 
 		 		     [field2], ... ]
-				    },			    
+				    } ],			    
  		 [ order  =>  fieldN]			    
 		  );
 		  
@@ -695,11 +700,14 @@ sub db_search
       my ($self,%args)=@_;
       my ($table,$search,$prep,%rc,@fields,@values,@q_fields,$order);
       my ($count, $max, $min, $boolean, $in_variant,$v_values,$cols);
-      my ($complex_cols,$specials);
+      my ($complex_cols,$specials,$distinct,$operator);
       
-      # quick error check    
-      $cols = "*";
-      foreach (qw(table search order count max min boolean columns))
+      $cols     = "*";
+      $operator = "AND";
+ 
+     # quick error check    
+      
+      foreach (qw(table search order count max min boolean columns distinct search_operator))
         {
 	 if (exists($args{$_})) 
             { 
@@ -707,6 +715,8 @@ sub db_search
 	      $search	= $args{$_} if ($_ eq 'search');
 	      $order	= $args{$_} if ($_ eq 'order');
 	      $cols	= $args{$_} if ($_ eq 'columns');
+	      $distinct	= $args{$_} if ($_ eq 'distinct');
+	      $operator	= $args{$_} if ($_ eq 'search_operator');
 	      $count	= $args{$_} if ($_ eq 'count');
 	      $max	= $args{$_} if ($_ eq 'max');
 	      $min	= $args{$_} if ($_ eq 'min');
@@ -738,7 +748,7 @@ sub db_search
       # search (e.g. select * from table; )
       if (!defined($search))
          {
-	  if ( (!defined($count)) && (!defined($min)) && (!defined($max)) )
+	  if ( (!defined($count)) && (!defined($min)) && (!defined($max)) && (!defined($distinct)) )
 	   {
 	    $prep  = sprintf 'SELECT %s FROM %s',$cols,$table;
 	   }
@@ -754,6 +764,10 @@ sub db_search
 	   {
 	     $prep  = sprintf 'SELECT min(%s) FROM %s',$min,$table;
 	   }
+          elsif (defined($distinct))
+           {
+             $prep .= sprintf 'SELECT DISTINCT %s FROM %s',$distinct,$table;
+           }
 	 }
 	elsif (
 	      (defined($search)) && 
@@ -853,7 +867,7 @@ sub db_search
 	    # create the SQL for the insert
 	    foreach (0 .. $#q_fields)
               {
-	       $prep .= " AND " if ($_ > 0);
+	       $prep .= (sprintf " %s ",$operator) if ($_ > 0);
 	       $prep .= sprintf "%s=%s",$q_fields[$_],$values[$_];
 	      }
 	   }
@@ -865,7 +879,7 @@ sub db_search
 	    my $_count=1;
 	    foreach (@fields)
 	     { 
-	      $prep .= " AND " if ($_count > 1);
+	      $prep .= (sprintf " %s ",$operator) if ($_count > 1);
 	      if (ref($search->{$_}) ne "ARRAY")
 	       {
 	        $prep .= sprintf "%s=%s",$self->_quote_field($_),
@@ -888,7 +902,7 @@ sub db_search
 	   } 
 #############	  
          }
-      if (defined($order)) { $prep .= (sprintf " ORDER BY %s ",$order)}
+      if (defined($order))      { $prep .= (sprintf " ORDER BY %s ",$order)}
       printf STDERR "D[%s] db_search: prepare = \'%s\' \n",
 	   $$,$prep  if ($self->{debug});
 
