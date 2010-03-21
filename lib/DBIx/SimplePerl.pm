@@ -14,7 +14,7 @@ use Data::Dumper;
 use constant true 	=> (1==1);
 use constant false 	=> (1==0);
 
-our $VERSION = '1.90';
+our $VERSION = '1.95';
 
 
 # Preloaded methods go here.
@@ -476,6 +476,30 @@ update.:
 
    delete from "users" where "username"="$username";
 
+Note that if more than one field is used in the search, the fields 
+will use as the conditional, in order,
+
+1) $sice->{search_conditional} (with values of "AND", "OR", or any other
+SQL accepted operator for delete statements.
+
+2) "AND" which is the default unless overridden in this object by point 1.
+
+This allows you to have  
+
+    $sice->db_delete(
+                   table   =>"users",
+                   search  => {
+                                username => $username,
+				dir	 => $dir
+                              }
+                 );
+
+become (by default)
+
+   delete from "users" where "username"="$username" AND "dir"=$dir;
+
+
+
 If the delete operation failed or generated errors or warnings, you
 will be able to check for the existence of and inspect $sice->{error}.
 As many fields as are relevant in the particular table may be used 
@@ -799,7 +823,7 @@ sub db_search
 	    # create the SQL for the insert
 	    foreach (0 .. $#q_fields)
               {
-	       $prep .= " AND " if ($_ > 0);
+	       $prep .= (defined($self->{search_condition}) ? $self->{search_condition} : " AND ") if ($_ > 0);
 	       $prep .= sprintf "%s=%s",$q_fields[$_],$values[$_];
 	      }
 	   }
@@ -1031,7 +1055,7 @@ sub db_delete
       $prep  = sprintf 'DELETE FROM %s WHERE ',$table;      
       foreach (0 .. $#fields)
         {
-	 $prep .= "," if ($_ > 0);
+	 $prep .= " AND " if ($_ > 0);
 	 $prep .= sprintf "%s=%s",$q_fields[$_],$values[$_];
 	}
       printf STDERR "D[%s] db_delete: SQL=\'%s\'\n",$$,$prep  if ($self->{debug});

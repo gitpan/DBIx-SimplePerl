@@ -1,4 +1,6 @@
 Revision history for Perl extension DBIx::SimplePerl.
+1.95 Sun Mar 21 13:42:00 2010
+	- fixed multi-field delete search conditional
 1.90 Wed Dec  5 15:33:00 2007
 	- added in operation to set which
 	  operation is used to combine the search fields
